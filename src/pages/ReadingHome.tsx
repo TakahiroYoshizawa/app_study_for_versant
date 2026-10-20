@@ -1,0 +1,76 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { READING_SETS } from '../data/readings';
+import { canSpeak, cancelSpeech, englishVoiceLabel, speakOnce } from '../lib/speech';
+
+export function ReadingHome() {
+  const [audioState, setAudioState] = useState<'idle' | 'playing' | 'done' | 'failed'>('idle');
+  const [voiceLabel, setVoiceLabel] = useState<string | null>(null);
+
+  async function onTestNumber() {
+    if (audioState === 'playing') {
+      cancelSpeech();
+      setAudioState('idle');
+      return;
+    }
+    setAudioState('playing');
+    const result = await speakOnce('Number four.', 0.96);
+    setVoiceLabel(englishVoiceLabel());
+    setAudioState(result === 'spoken' ? 'done' : 'failed');
+  }
+
+  return (
+    <main className="page">
+      <p className="eyebrow">Versant 練習 · Part A</p>
+      <h1>音読</h1>
+      <p className="lede">
+        画面に英文が8文出ています。音声は番号だけを読みます。その番号の文を、書いてあるとおりに読んでください。
+      </p>
+      <div className="actions">
+        <Link to="/a/practice" className="btn" data-testid="start-reading">
+          練習を始める
+        </Link>
+        <Link to="/a/questions" className="btn secondary">
+          問題の正否
+        </Link>
+      </div>
+      <section className="card">
+        <h2>出題の流れ</h2>
+        <ol className="steps">
+          <li>4文ずつ、内容がつながった組が2つ、最初から見えています。</li>
+          <li>「Number four.」のように、読む番号だけが一度読まれます。文そのものは読まれません。</li>
+          <li>合図のあと15秒以内に、その番号の文を読みます。6秒以内に読み始めないと無回答です。</li>
+          <li>8文を1回ずつ出します。順番は毎回入れ替わり、番号順には進みません。</li>
+        </ol>
+        <p className="muted">
+          セットは{READING_SETS.length}つです。間違えた文にはチェックが付き、次のセットはチェックが多いものを優先します。3回連続で正解した文は、理解できたものとします。
+        </p>
+      </section>
+      <section className="card">
+        <h2>番号の音声</h2>
+        <p>文は画面にあるので、読み上げるのは番号だけです。先に「Number four.」が聞こえるか確認してください。</p>
+        {canSpeak() ? (
+          <button type="button" className="btn secondary" data-testid="test-number" onClick={() => void onTestNumber()}>
+            {audioState === 'playing' ? '停止' : '番号を読み上げる'}
+          </button>
+        ) : (
+          <p className="note">このブラウザは読み上げに対応していません。Chrome で開いてください。</p>
+        )}
+        {audioState === 'done' ? (
+          <p className="muted">
+            読み上げが終わりました。{voiceLabel ? `使った声は ${voiceLabel} です。` : '英語の声が見つからなかったので、ブラウザ標準の声で読みました。'}
+          </p>
+        ) : null}
+        {audioState === 'failed' ? <p className="note">番号を読み上げられませんでした。もう一度試してください。</p> : null}
+      </section>
+      <section className="card">
+        <h2>採点</h2>
+        <p>指定された1文と、認識した読みを比べます。8文のうち一番近い文を正解にはしません。</p>
+        <ul>
+          <li>正解は、その文の単語が順に揃っていることです。認識が余分な語を足しても、抜けと言い換えがなければ正解です。</li>
+          <li>別の番号を読んだように見えるときは、その旨を結果に出します。点数の付け替えはしません。</li>
+        </ul>
+      </section>
+    </main>
+  );
+}
