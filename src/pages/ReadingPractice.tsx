@@ -1,6 +1,7 @@
 import { useContext, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ReadingBoard } from '../components/ReadingBoard';
+import { situationLabel } from '../data/readings';
 import { ExamModeContext } from '../components/exam-mode';
 import { captureResponse, type CaptureTick } from '../lib/capture';
 import { blobToDataUrl } from '../lib/format';
@@ -250,26 +251,26 @@ export function ReadingPractice() {
       <div className="exam-shell">
         <div className="exam-bar">
           <span>
-            Part A · {live.set.title} · {live.item.number}番 · {Math.max(1, live.askOrder.indexOf(live.item.number) + 1)} / {live.askOrder.length}
+            Part A · {situationLabel(live.set.id)} · {live.item.number} · {Math.max(1, live.askOrder.indexOf(live.item.number) + 1)}/{live.askOrder.length}
           </span>
           <button type="button" className="text-btn" onClick={() => setAborting(true)}>
-            中断
+            Stop
           </button>
         </div>
         <section className="exam reading" data-phase={phase} data-testid="phase">
           <p className="eyebrow">
-            {phase === 'number' ? '番号' : phase === 'cue' ? '合図' : phase === 'cue-failed' ? '音声' : '音読'}
+            {phase === 'number' ? 'Number' : phase === 'cue' ? 'Cue' : phase === 'cue-failed' ? 'Voice' : 'Read'}
           </p>
           <h1>
             {phase === 'number'
-              ? '番号を聞いてください'
+              ? 'Listen'
               : phase === 'cue'
-                ? '読み始めてください'
+                ? 'Go'
                 : phase === 'cue-failed'
-                  ? '番号を読み上げられませんでした'
+                  ? 'No number'
                   : phase === 'saving'
-                    ? '記録しています'
-                    : `${live.item.number}番を読んでください`}
+                    ? 'Saving'
+                    : `Read ${live.item.number}`}
           </h1>
           {phase === 'respond' || phase === 'saving' ? (
             <p className="reading-number" data-testid="reading-number">
@@ -278,7 +279,7 @@ export function ReadingPractice() {
           ) : null}
           {phase === 'cue-failed' ? (
             <button type="button" className="btn" onClick={retryCue}>
-              番号をもう一度読む
+              Play number again
             </button>
           ) : null}
           {phase === 'respond' || phase === 'saving' ? (
@@ -295,7 +296,7 @@ export function ReadingPractice() {
                 {tick.interim || '読み始めると、ここに認識した文字が出ます。'}
               </p>
               <button type="button" className="btn secondary" data-testid="finish-speaking" onClick={() => manualStop.current?.()}>
-                読み終えた
+                Done
               </button>
             </>
           ) : null}
@@ -304,7 +305,7 @@ export function ReadingPractice() {
         {aborting ? (
           <div className="dialog-backdrop">
             <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="abort-title">
-              <h2 id="abort-title">この問題を中断しますか？</h2>
+              <h2 id="abort-title">Stop this item?</h2>
               <p>ここまでの回答は記録されません。</p>
               <div className="actions">
                 <button
@@ -315,10 +316,10 @@ export function ReadingPractice() {
                     navigate('/a');
                   }}
                 >
-                  中断する
+                  Stop
                 </button>
                 <button type="button" className="btn secondary" onClick={() => setAborting(false)}>
-                  続ける
+                  Continue
                 </button>
               </div>
             </div>
@@ -330,8 +331,8 @@ export function ReadingPractice() {
 
   return (
     <main className="page">
-      <p className="eyebrow">Part A · 準備</p>
-      <h1>マイクの確認</h1>
+      <p className="eyebrow">Part A</p>
+      <h1>Microphone</h1>
       <p className="lede">番号が読まれたら、画面のその文をそのまま読んでください。採点には Chrome の音声認識を使います。</p>
       {!supported ? (
         <p className="note">このブラウザでは音声認識が使えません。Chrome で開くと、読んだ文を採点できます。</p>
@@ -339,14 +340,14 @@ export function ReadingPractice() {
       {micError ? <p className="note">{micError}</p> : null}
       {stream ? (
         <section className="card">
-          <h2>入力レベル</h2>
+          <h2>Level</h2>
           <div className="meter" aria-hidden="true">
             <span style={{ width: `${Math.round(level * 100)}%` }} />
           </div>
           <p className="muted">バーが動けば、マイクは入っています。</p>
           <div className="actions">
             <button type="button" className="btn secondary" onClick={onTestMic}>
-              {testing ? '聞き取りを止める' : '試しに話す'}
+              {testing ? 'Stop' : 'Try speaking'}
             </button>
           </div>
           <p className="caption" lang="en">{testing && !testText ? 'I like tea. と言ってみてください。' : testText || 'まだ認識していません。'}</p>
@@ -354,21 +355,21 @@ export function ReadingPractice() {
       ) : (
         <div className="actions">
           <button type="button" className="btn" data-testid="enable-mic" onClick={onEnableMic}>
-            マイクをオンにする
+            Turn mic on
           </button>
         </div>
       )}
       {stream && supported ? (
         <div className="actions">
           <button type="button" className="btn" data-testid="begin-reading" onClick={() => onBegin(true)}>
-            セットを始める
+            Start set
           </button>
         </div>
       ) : null}
       {micFailed || !supported ? (
         <div className="actions">
           <button type="button" className="btn secondary" onClick={() => onBegin(false)}>
-            番号を聞くだけ始める
+            Hear numbers only
           </button>
         </div>
       ) : null}

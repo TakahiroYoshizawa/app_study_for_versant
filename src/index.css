@@ -36,15 +36,15 @@ h1, h2, .score, .timer strong, .score-ring strong {
   letter-spacing: -0.03em;
 }
 
-h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); line-height: 1.15; margin: 0 0 0.4rem; }
-h2 { font-size: 1.25rem; margin: 0 0 0.6rem; }
-p { margin: 0 0 0.8rem; }
+h1 { font-size: clamp(1.7rem, 4.5vw, 2.35rem); line-height: 1.15; margin: 0 0 0.3rem; }
+h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
+p { margin: 0 0 0.55rem; }
 button, a { font: inherit; }
 
 .page {
   width: min(740px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 28px 0 calc(72px + env(safe-area-inset-bottom));
+  padding: 16px 0 calc(48px + env(safe-area-inset-bottom));
 }
 
 .topbar {
@@ -93,7 +93,7 @@ button, a { font: inherit; }
   text-transform: uppercase;
 }
 
-.lede { font-size: 1.08rem; max-width: 38rem; }
+.lede { font-size: 1rem; max-width: 38rem; }
 .muted { color: var(--muted); }
 .disclaimer { color: var(--muted); font-size: 0.95rem; }
 
@@ -104,7 +104,7 @@ button, a { font: inherit; }
   box-shadow: var(--shadow);
 }
 
-.card { padding: 18px 18px 16px; margin: 16px 0; }
+.card { padding: 12px 14px 10px; margin: 10px 0; }
 .note {
   padding: 12px 14px;
   color: var(--ink);
@@ -115,7 +115,7 @@ button, a { font: inherit; }
 .steps, .card ul { margin: 0; padding-left: 1.2rem; }
 .steps li, .card li { margin: 0.35rem 0; }
 
-.actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 
 .field { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; }
 .field span { color: var(--muted); font-size: 0.92rem; }
@@ -142,6 +142,19 @@ button, a { font: inherit; }
 .session-list strong { font-weight: 600; }
 .session-list small.good { color: var(--good); }
 .session-list small.bad { color: var(--bad); }
+
+.hearing-list { list-style: none; margin: 8px 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.hearing-list li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+}
+.hearing-list small.good { color: var(--good); }
+.hearing-list small.bad { color: var(--bad); }
 
 .review-block { margin-top: 18px; padding-top: 8px; border-top: 1px solid var(--line); }
 .review-block h3 { font-size: 1.05rem; margin: 0 0 0.4rem; }
@@ -224,6 +237,7 @@ button, a { font: inherit; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 .exam-bar { width: min(860px, calc(100% - 28px)); }
+.exam h1 { font-size: clamp(1.35rem, 4vw, 1.8rem); margin-bottom: 0.2rem; }
 .exam {
   flex: 1;
   width: min(720px, calc(100% - 28px));

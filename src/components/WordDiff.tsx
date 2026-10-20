@@ -6,18 +6,18 @@ export function WordDiff({ ops }: { ops: DiffOp[] }) {
   return (
     <div className="diff-block">
       <div className="legend">
-        <span>一致 {counts.match}</span>
-        <span>置換 {counts.sub}</span>
-        <span>不足 {counts.missing}</span>
-        <span>余分 {counts.extra}</span>
+        <span>Match {counts.match}</span>
+        <span>Change {counts.sub}</span>
+        <span>Missing {counts.missing}</span>
+        <span>Extra {counts.extra}</span>
       </div>
-      <div className="diff" aria-label="単語の比較">
+      <div className="diff" aria-label="Words">
         {ops.length === 0 ? <p className="muted">比べる単語がありません。</p> : null}
         {ops.map((op, index) => {
           if (op.type === 'match') {
             return (
               <span className="token match" key={`${op.type}-${index}`}>
-                <small>一致</small>
+                <small>Match</small>
                 {op.word}
               </span>
             );
@@ -25,7 +25,7 @@ export function WordDiff({ ops }: { ops: DiffOp[] }) {
           if (op.type === 'sub') {
             return (
               <span className="token sub" key={`${op.type}-${index}`}>
-                <small>正解 {op.expected}</small>
+                <small>For {op.expected}</small>
                 {op.actual}
               </span>
             );
@@ -33,14 +33,14 @@ export function WordDiff({ ops }: { ops: DiffOp[] }) {
           if (op.type === 'missing') {
             return (
               <span className="token missing" key={`${op.type}-${index}`}>
-                <small>不足</small>
+                <small>Missing</small>
                 {op.expected}
               </span>
             );
           }
           return (
             <span className="token extra" key={`${op.type}-${index}`}>
-              <small>余分</small>
+              <small>Extra</small>
               {op.actual}
             </span>
           );

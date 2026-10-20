@@ -24,23 +24,23 @@ export function PartBHome() {
 
   return (
     <main className="page">
-      <p className="eyebrow">Versant 練習 · Part B</p>
-      <h1>リピート</h1>
+      <p className="eyebrow">Part B</p>
+      <h1>Repeat</h1>
       <p className="lede">
         短い英文が一度だけ読まれます。聞こえたとおりに、すぐに繰り返してください。画面には、答えるまで文を出しません。
       </p>
       <div className="actions">
         <Link to="/practice" className="btn" data-testid="start-practice">
-          練習を始める
+          Start
         </Link>
         <Link to="/read" className="btn secondary" data-testid="start-read">
-          見て読む
+          Read along
         </Link>
         <Link to="/questions" className="btn secondary" data-testid="questions-link">
-          問題の正否
+          Progress
         </Link>
         <Link to="/history" className="btn secondary" data-testid="history-link">
-          記録を見る
+          History
         </Link>
       </div>
 
@@ -51,11 +51,11 @@ export function PartBHome() {
       ) : null}
 
       <section className="card">
-        <h2>音声の確認</h2>
+        <h2>Sound check</h2>
         <p>問題の英文は、この端末の読み上げで出します。先に音が出るか確認してください。</p>
         {canSpeak() ? (
           <button type="button" className="btn secondary" data-testid="test-audio" onClick={() => void onTestAudio()}>
-            {audioState === 'playing' ? '停止' : '英文を読み上げる'}
+            {audioState === 'playing' ? 'Stop' : 'Play'}
           </button>
         ) : (
           <p className="note">このブラウザは読み上げに対応していません。Chrome で開いてください。</p>
@@ -72,7 +72,7 @@ export function PartBHome() {
       </section>
 
       <section className="card">
-        <h2>出題の流れ</h2>
+        <h2>Flow</h2>
         <ol className="steps">
           <li>英語の指示のあと、文が一度だけ読まれます。</li>
           <li>合図のあと、15秒以内に同じ文を言います。</li>
@@ -83,12 +83,12 @@ export function PartBHome() {
         </p>
         <p className="muted">
           見て読むは、同じ文を最初に聞いてから、画面に出たまま読む練習です。正否はリピートとは別に数えます。{' '}
-          <Link to="/read/questions">見て読む正否</Link>
+          <Link to="/read/questions">Read along progress</Link>
         </p>
       </section>
 
       <section className="card">
-        <h2>採点</h2>
+        <h2>Scoring</h2>
         <p>
           点数は練習用の目安です。本番の Versant スコアではありません。発音は採点しません。音声はサーバに送らず、この端末の音声認識で文字にしてから比べます。
         </p>

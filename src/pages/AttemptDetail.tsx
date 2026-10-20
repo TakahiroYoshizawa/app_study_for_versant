@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { WordDiff } from '../components/WordDiff';
 import { findReadingSet, situationLabel } from '../data/readings';
-import { difficultyLabel, spokenWordCount } from '../data/sentences';
-import { endLabel, formatSeconds } from '../lib/format';
+import { spokenWordCount } from '../data/sentences';
+import { formatSeconds } from '../lib/format';
 import { MASTER_STREAK, attemptWasCorrect, progressByItem } from '../lib/progress';
 import { practiceRunProgress } from '../lib/practice-run';
 import { beginReading, nextAskNumber } from '../lib/reading-session';
@@ -37,16 +37,15 @@ export function AttemptDetail() {
   if (!attempt) {
     return (
       <main className="page">
-        <h1>記録が見つかりません</h1>
+        <h1>Not found</h1>
         <Link to="/history" className="btn secondary">
-          記録一覧へ
+          History
         </Link>
       </main>
     );
   }
 
   const notice = noticeFor(attempt);
-  const showFactor = !attempt.noResponse && attempt.contentScore > 0 && attempt.latencyFactor < 1;
   const correct = attemptWasCorrect(attempt);
   const status = progressByItem(loadAttempts()).get(attempt.sentenceId);
   const readingSet = attempt.part === 'A' && attempt.readingSetId ? findReadingSet(attempt.readingSetId) : undefined;
@@ -56,12 +55,12 @@ export function AttemptDetail() {
       : null;
   const progress = practiceRunProgress(attempt.id);
   const nextLabel = progress?.finished
-    ? 'セッションの採点を見る'
+    ? 'Session'
     : attempt.part === 'A'
       ? upcoming != null
-        ? '次の番号'
-        : '問題一覧'
-      : '次の文';
+        ? 'Next'
+        : 'Questions'
+      : 'Next';
 
   function stopClip() {
     clipRef.current?.pause();
@@ -129,7 +128,18 @@ export function AttemptDetail() {
     navigate('/history');
   }
 
-  const partA = attempt.part === 'A';
+  const partTitle =
+    attempt.part === 'A'
+      ? readingSet
+        ? situationLabel(readingSet.id)
+        : 'Situation'
+      : attempt.part === 'B-read'
+        ? 'Read along'
+        : 'Repeat';
+  const partPlace =
+    attempt.part === 'A'
+      ? partAPlace(attempt, readingSet)
+      : `${difficultyName(attempt.difficulty)} · ${spokenWordCount(attempt.sentenceText)} words`;
   const mastery = status?.mastered
     ? `${MASTER_STREAK}回連続で正解したので、この問題は理解できたものとします。`
     : status?.checked
@@ -138,37 +148,17 @@ export function AttemptDetail() {
 
   return (
     <main className="page">
-      {partA ? (
-        <div className="result-head">
-          <div>
-            <p className="eyebrow">Part A</p>
-            <h1>{readingSet ? situationLabel(readingSet.id) : 'Situation'}</h1>
-            <p className="result-place">{partAPlace(attempt, readingSet)}</p>
-            <p className={correct ? 'verdict good' : 'verdict bad'} data-testid="verdict">
-              {correct ? 'Correct' : 'Incorrect'}
-            </p>
-          </div>
-          <ScoreRing score={attempt.overallScore} />
-        </div>
-      ) : (
-        <>
-          <p className="eyebrow">
-            {`${attempt.part === 'B-read' ? '見て読む' : 'リピート'} · ${difficultyLabel(attempt.difficulty)} · ${spokenWordCount(attempt.sentenceText)}語 · ${endLabel(attempt.end)}`}
-          </p>
-          <h1>結果</h1>
+      <div className="result-head">
+        <div>
+          <p className="eyebrow">{attempt.part === 'A' ? 'Part A' : 'Part B'}</p>
+          <h1>{partTitle}</h1>
+          <p className="result-place">{partPlace}</p>
           <p className={correct ? 'verdict good' : 'verdict bad'} data-testid="verdict">
-            {correct ? '正解' : '不正解'}
+            {correct ? 'Correct' : 'Incorrect'}
           </p>
-          <p className="muted" data-testid="mastery">
-            {mastery}
-          </p>
-          <p className="score-kicker">練習用の目安</p>
-          <p className="score" data-testid="overall-score">
-            {attempt.overallScore}
-          </p>
-          <p className="disclaimer">本番の Versant スコアではありません。発音は採点していません。</p>
-        </>
-      )}
+        </div>
+        <ScoreRing score={attempt.overallScore} />
+      </div>
       {notice ? <p className="note">{notice}</p> : null}
       {progress && !progress.finished ? (
         <p className="muted" data-testid="session-progress">
@@ -179,146 +169,101 @@ export function AttemptDetail() {
         <p className="note">別の番号の文に近い読み方です。点数は指定された文だけで付けています。</p>
       ) : null}
 
-      <section className={partA ? 'stats result-stats' : 'stats'}>
+      <section className="stats result-stats">
         <div>
-          <span>内容</span>
+          <span>Content</span>
           <strong>{attempt.contentScore}</strong>
         </div>
         <div>
-          <span>反応</span>
+          <span>Response</span>
           <strong>{formatSeconds(attempt.latencyMs)}</strong>
         </div>
         <div>
-          <span>話した時間</span>
+          <span>Time</span>
           <strong>{formatSeconds(attempt.hadSignal ? attempt.speakingMs : null)}</strong>
         </div>
         <div>
-          <span>話速</span>
+          <span>Rate</span>
           <strong>{attempt.wpm == null ? '—' : `${attempt.wpm}`}</strong>
         </div>
       </section>
-      {partA ? (
-        <>
-          <p className="muted result-formula">
-            内容点 {attempt.contentScore} × 反応係数 {attempt.latencyFactor.toFixed(2)} = 総合 {attempt.overallScore}
-          </p>
-          <p className="disclaimer">本番の Versant スコアではありません。発音は採点していません。</p>
-        </>
-      ) : showFactor ? (
-        <p className="muted">
-          内容点 {attempt.contentScore} × 反応係数 {attempt.latencyFactor.toFixed(2)} = 総合 {attempt.overallScore}
-        </p>
-      ) : !attempt.noResponse && attempt.contentScore > 0 && attempt.latencyFactor === 1 ? (
-        <p className="muted">反応は1秒以内だったので、総合点は内容点と同じです。</p>
-      ) : null}
+      <p className="muted result-formula">
+        Content {attempt.contentScore} × {attempt.latencyFactor.toFixed(2)} = {attempt.overallScore}
+      </p>
+      <p className="disclaimer">本番の Versant スコアではありません。発音は採点していません。</p>
 
-      {partA ? null : (
-        <section className="card">
-          <h2>単語の比較</h2>
-          <p className="muted">小文字にし、I'm や don't などの短縮形を広げて比べています。um は無視します。</p>
-          <WordDiff ops={attempt.ops} />
-        </section>
-      )}
-
-      {partA ? (
-        <>
-          <section className="card playback">
-            <h2>正解の文</h2>
-            <div className="playback-row">
-              <button
-                type="button"
-                className="play-btn"
-                aria-label={speaking ? '停止' : '正解をもう一度聞く'}
-                onClick={() => void onReplay()}
-              >
-                {speaking ? <StopIcon /> : <PlayIcon />}
-              </button>
-              <p lang="en">{attempt.sentenceText}</p>
-            </div>
-          </section>
-          <section className="card playback">
-            <h2>あなたの回答</h2>
-            <div className="playback-row">
-              {attempt.audioDataUrl ? (
-                <button
-                  type="button"
-                  className="play-btn"
-                  aria-label={clipPlaying ? '停止' : '自分の声を聞く'}
-                  onClick={onPlayClip}
-                >
-                  {clipPlaying ? <StopIcon /> : <PlayIcon />}
-                </button>
-              ) : null}
-              <p lang="en">{attempt.transcript.trim() || '（認識した文字はありません）'}</p>
-            </div>
-            {attempt.audioDataUrl ? null : (
-              <p className="muted">{attempt.audioSkippedReason ?? '音声は保存されていません。'}</p>
-            )}
-          </section>
-          <section className="card">
-            <h2>単語の比較</h2>
-            <p className="muted">小文字にし、I'm や don't などの短縮形を広げて比べています。um は無視します。</p>
-            <WordDiff ops={attempt.ops} />
-          </section>
-          <p className="muted" data-testid="mastery">
-            {mastery}
-          </p>
-        </>
-      ) : (
-        <>
-          <section className="card">
-            <h2>あなたの回答</h2>
-            <p lang="en">{attempt.transcript.trim() || '（認識した文字はありません）'}</p>
-            {attempt.normalizedHeard ? (
-              <p className="muted">
-                採点に使った形: <span lang="en">{attempt.normalizedHeard}</span>
-              </p>
-            ) : null}
-          </section>
-          <section className="card">
-            <h2>正解の文</h2>
-            <p lang="en">{attempt.sentenceText}</p>
-            <div className="actions">
-              <button type="button" className="btn secondary" onClick={() => void onReplay()}>
-                {speaking ? '停止' : attempt.part === 'B-read' ? 'お手本を聞く' : '正解をもう一度聞く'}
-              </button>
-            </div>
-          </section>
-          <section className="card">
-            <h2>自分の声</h2>
-            {attempt.audioDataUrl ? (
-              <audio controls src={attempt.audioDataUrl} preload="none" />
-            ) : (
-              <p className="muted">{attempt.audioSkippedReason ?? '音声は保存されていません。'}</p>
-            )}
-          </section>
-        </>
-      )}
+      <section className="card playback">
+        <h2>Answer</h2>
+        <div className="playback-row">
+          <button
+            type="button"
+            className="play-btn"
+            aria-label={speaking ? 'Stop' : 'Play answer'}
+            onClick={() => void onReplay()}
+          >
+            {speaking ? <StopIcon /> : <PlayIcon />}
+          </button>
+          <p lang="en">{attempt.sentenceText}</p>
+        </div>
+      </section>
+      <section className="card playback">
+        <h2>You</h2>
+        <div className="playback-row">
+          {attempt.audioDataUrl ? (
+            <button
+              type="button"
+              className="play-btn"
+              aria-label={clipPlaying ? 'Stop' : 'Play your recording'}
+              onClick={onPlayClip}
+            >
+              {clipPlaying ? <StopIcon /> : <PlayIcon />}
+            </button>
+          ) : null}
+          <p lang="en">{attempt.transcript.trim() || '(no words recognized)'}</p>
+        </div>
+        {attempt.audioDataUrl ? null : (
+          <p className="muted">{attempt.audioSkippedReason ?? '音声は保存されていません。'}</p>
+        )}
+      </section>
+      <section className="card">
+        <h2>Words</h2>
+        <p className="muted">小文字にし、I'm や don't などの短縮形を広げて比べています。um は無視します。</p>
+        <WordDiff ops={attempt.ops} />
+      </section>
+      <p className="muted" data-testid="mastery">
+        {mastery}
+      </p>
 
       <div className="actions">
         <button type="button" className="btn" data-testid="next-sentence" onClick={onNext}>
           {nextLabel}
         </button>
         <Link to="/history" className="btn secondary">
-          記録一覧
+          History
         </Link>
       </div>
       {confirming ? (
         <div className="actions">
           <button type="button" className="btn danger" onClick={onDelete}>
-            削除する
+            Delete
           </button>
           <button type="button" className="btn secondary" onClick={() => setConfirming(false)}>
-            やめる
+            Cancel
           </button>
         </div>
       ) : (
         <button type="button" className="text-btn" onClick={() => setConfirming(true)}>
-          この記録を削除
+          Delete
         </button>
       )}
     </main>
   );
+}
+
+function difficultyName(difficulty: Attempt['difficulty']): string {
+  if (difficulty === 'easy') return 'Easy';
+  if (difficulty === 'medium') return 'Medium';
+  return 'Hard';
 }
 
 function partAPlace(attempt: Attempt, set: ReturnType<typeof findReadingSet>): string {

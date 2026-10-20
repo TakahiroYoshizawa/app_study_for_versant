@@ -4,12 +4,28 @@ const RUN_KEY = 'versant.practice.run';
 
 export type PracticePart = 'A' | 'B' | 'B-read';
 
+export type WordHearing = 'clear' | 'uncertain' | 'missing';
+
+export type ReviewedWord = {
+  word: string;
+  status: WordHearing;
+};
+
+export type PronunciationNote = {
+  word: string;
+  note: string;
+};
+
 export type LiteralReview = {
   attemptId: string;
   transcript: string;
   correct: boolean;
   normalizedHeard: string;
   ops: DiffOp[];
+  words: ReviewedWord[];
+  extras: string[];
+  restart: boolean;
+  pronunciation: PronunciationNote[];
   unavailable?: string;
 };
 
@@ -97,6 +113,10 @@ function isReview(value: unknown): value is LiteralReview {
     typeof review.attemptId === 'string' &&
     typeof review.transcript === 'string' &&
     typeof review.correct === 'boolean' &&
-    Array.isArray(review.ops)
+    Array.isArray(review.ops) &&
+    Array.isArray(review.words) &&
+    Array.isArray(review.extras) &&
+    typeof review.restart === 'boolean' &&
+    Array.isArray(review.pronunciation)
   );
 }

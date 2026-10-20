@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { WordDiff } from '../components/WordDiff';
 import { loadGeminiKey, saveGeminiKey, transcribeAttempts } from '../lib/gemini';
 import { loadPracticeRun, practiceRunSize, savePracticeReviews, type PracticePart } from '../lib/practice-run';
 import { attemptWasCorrect } from '../lib/progress';
@@ -18,10 +17,10 @@ export function SessionReview() {
   if (!run || run.attemptIds.length === 0) {
     return (
       <main className="page">
-        <h1>セッションがありません</h1>
+        <h1>No session</h1>
         <p className="lede">練習を始めると、10問程度が終わったところでまとめが出ます。</p>
         <Link to="/" className="btn secondary">
-          ホームへ
+          Home
         </Link>
       </main>
     );
@@ -36,9 +35,13 @@ export function SessionReview() {
       ? 0
       : Math.round(attempts.reduce((sum, attempt) => sum + attempt.overallScore, 0) / attempts.length);
   const reviews = new Map((run.reviews ?? []).map((review) => [review.attemptId, review]));
-  const changed = attempts.filter((attempt) => {
+  const sentenceRisks = attempts.filter((attempt) => {
     const review = reviews.get(attempt.id);
-    return review && !review.unavailable && review.correct !== attemptWasCorrect(attempt);
+    return review && !review.unavailable && !review.correct;
+  }).length;
+  const pronunciationNotes = attempts.filter((attempt) => {
+    const review = reviews.get(attempt.id);
+    return review && !review.unavailable && review.pronunciation.length > 0;
   }).length;
 
   async function onRequest() {
@@ -63,12 +66,12 @@ export function SessionReview() {
 
   return (
     <main className="page">
-      <p className="eyebrow">{partLabel(run.part)} · セッション</p>
-      <h1>まとめの採点</h1>
+      <p className="eyebrow">{partLabel(run.part)}</p>
+      <h1>Session</h1>
       <p className="lede">
         {run.part === 'A' ? '1セットが終わったので、ここまでの結果をまとめています。' : `${practiceRunSize(run.part)}問が終わったので、ここまでの結果をまとめています。`}
       </p>
-      <p className="score-kicker">端末の音声認識</p>
+      <p className="score-kicker">On this device</p>
       <p className="score" data-testid="session-correct">
         {correctCount}/{attempts.length}
       </p>
@@ -76,7 +79,7 @@ export function SessionReview() {
       <p className="disclaimer">各問の合格、チェック、3回連続は、このまとめでは変えません。</p>
 
       <section className="card">
-        <h2>各問</h2>
+        <h2>Items</h2>
         <ul className="session-list">
           {attempts.map((attempt, index) => {
             const correct = attemptWasCorrect(attempt);
@@ -86,7 +89,7 @@ export function SessionReview() {
                 <Link to={`/history/${attempt.id}`}>
                   <span>{index + 1}</span>
                   <strong lang="en">{attempt.sentenceText}</strong>
-                  <small className={correct ? 'good' : 'bad'}>{correct ? '正解' : '不正解'} · {attempt.overallScore}</small>
+                  <small className={correct ? 'good' : 'bad'}>{correct ? 'Correct' : 'Incorrect'} · {attempt.overallScore}</small>
                 </Link>
                 {review?.unavailable ? <p className="muted">{review.unavailable}</p> : null}
               </li>
@@ -96,11 +99,11 @@ export function SessionReview() {
       </section>
 
       <section className="card" data-testid="gemini-ask">
-        <h2>Gemini に聞き直してもらいますか？</h2>
+        <h2>Gemini に聞きますか？</h2>
         <p>
-          このセッションの録音だけをまとめて送ります。正解文は送りません。Gemini には、聞こえた単語をそのまま書き起こすよう頼み、返ってきた文字を今と同じ方法で正解文と比べます。
+          録音と正解文をまとめて送ります。単語が確かに聞こえるか、余分な語や言い直しがあるか、気になる発音はどこかを答えさせます。正答を増やす採点ではありません。
         </p>
-        <p className="muted">発音点は出しません。各問の合格とチェックも書き換えません。アプリに共通のキーはありません。使う人が自分の Gemini APIキーを貼ります。利用料はそのキーのアカウントにかかり、キーはこの端末にだけ残します。</p>
+        <p className="muted">発音の点数は出しません。各問の合格とチェックも書き換えません。アプリに共通のキーはありません。使う人が自分の Gemini APIキーを貼ります。利用料はそのキーのアカウントにかかり、キーはこの端末にだけ残します。</p>
         {phase === 'declined' ? (
           <p className="note">依頼しませんでした。端末の判定のままです。</p>
         ) : null}
@@ -109,7 +112,7 @@ export function SessionReview() {
         {phase !== 'sending' ? (
           <>
             <label className="field">
-              <span>Gemini APIキー</span>
+              <span>Gemini API key</span>
               <input
                 type="password"
                 autoComplete="off"
@@ -120,7 +123,7 @@ export function SessionReview() {
             </label>
             <div className="actions">
               <button type="button" className="btn" data-testid="request-gemini" onClick={() => void onRequest()}>
-                Geminiに採点を依頼する
+                Geminiに聞く
               </button>
               {phase === 'ask' ? (
                 <button
@@ -142,24 +145,42 @@ export function SessionReview() {
 
       {phase === 'done' && run.reviews ? (
         <section className="card" data-testid="gemini-result">
-          <h2>聞き直しの結果</h2>
+          <h2>Gemini の聞き取り</h2>
           <p>
-            端末の判定と食い違った問は {changed} 問です。食い違いがある問は、録音ではその単語が聞こえていない可能性があります。
+            文として減点されうる問は {sentenceRisks} 問です。発音の指摘がある問は {pronunciationNotes} 問です。本番の点数ではなく、合格とチェックも変えていません。
           </p>
           {attempts.map((attempt, index) => {
             const review = reviews.get(attempt.id);
             if (!review || review.unavailable) return null;
-            const localCorrect = attemptWasCorrect(attempt);
-            const differed = review.correct !== localCorrect;
+            const risk = !review.correct;
             return (
-              <article key={attempt.id} className={differed ? 'review-block differed' : 'review-block'}>
+              <article key={attempt.id} className={risk || review.pronunciation.length > 0 ? 'review-block differed' : 'review-block'}>
                 <h3>
-                  {index + 1}. {differed ? '判定が食い違います' : '端末と同じ判定です'}
+                  {index + 1}. {risk ? '文として減点されうる' : '文の抜けは見つからなかった'}
                 </h3>
-                <p className={review.correct ? 'verdict good' : 'verdict bad'}>{review.correct ? '聞き直しでは正解' : '聞き直しでは不正解'}</p>
-                <p className="muted">端末の認識: {localCorrect ? '正解' : '不正解'}</p>
-                <p lang="en">{review.transcript || '（聞こえた単語はありません）'}</p>
-                <WordDiff ops={review.ops} />
+                <p className="muted">端末の判定は {attemptWasCorrect(attempt) ? '正解' : '不正解'} のままです。</p>
+                <ul className="hearing-list">
+                  {review.words.map((word, wordIndex) => (
+                    <li key={`${word.word}-${wordIndex}`}>
+                      <span lang="en">{word.word}</span>
+                      <small className={word.status === 'clear' ? 'good' : 'bad'}>{hearingLabel(word.status)}</small>
+                    </li>
+                  ))}
+                </ul>
+                {review.extras.length > 0 ? <p>余分な語: <span lang="en">{review.extras.join(' ')}</span></p> : null}
+                {review.restart ? <p>言い直しています。</p> : null}
+                {review.pronunciation.length > 0 ? (
+                  <ul>
+                    {review.pronunciation.map((note) => (
+                      <li key={`${note.word}-${note.note}`}>{note.note}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">気になる発音の指摘はありません。</p>
+                )}
+                <p className="muted" lang="en">
+                  {review.transcript || '（聞こえた単語はありません）'}
+                </p>
               </article>
             );
           })}
@@ -168,19 +189,25 @@ export function SessionReview() {
 
       <div className="actions">
         <Link to={againPath(run.part)} className="btn">
-          もう一度練習する
+          Again
         </Link>
         <Link to="/history" className="btn secondary">
-          記録一覧
+          History
         </Link>
       </div>
     </main>
   );
 }
 
+function hearingLabel(status: 'clear' | 'uncertain' | 'missing'): string {
+  if (status === 'clear') return '聞こえる';
+  if (status === 'uncertain') return 'あいまい';
+  return '言っていない';
+}
+
 function partLabel(part: PracticePart): string {
   if (part === 'A') return 'Part A';
-  if (part === 'B-read') return '見て読む';
+  if (part === 'B-read') return 'Read along';
   return 'Part B';
 }
 

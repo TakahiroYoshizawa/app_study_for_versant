@@ -407,9 +407,9 @@ export const SENTENCES: Sentence[] = [
 ];
 
 export function difficultyLabel(difficulty: Difficulty): string {
-  if (difficulty === 'easy') return '易しい';
-  if (difficulty === 'medium') return '標準';
-  return '難しい';
+  if (difficulty === 'easy') return 'Easy';
+  if (difficulty === 'medium') return 'Medium';
+  return 'Hard';
 }
 
 export function spokenWordCount(text: string): number {

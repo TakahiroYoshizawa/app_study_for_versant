@@ -55,8 +55,8 @@ export function selectNextSentence(
 }
 
 export function statusLabel(status: ItemStatus | undefined): string {
-  if (!status || status.attempts === 0) return '未着手';
-  if (status.mastered) return '理解できた';
-  if (status.checked) return `チェック · 連続 ${status.streak}/${MASTER_STREAK}`;
-  return `連続 ${status.streak}/${MASTER_STREAK}`;
+  if (!status || status.attempts === 0) return 'New';
+  if (status.mastered) return 'Done';
+  if (status.checked) return `Check · ${status.streak}/${MASTER_STREAK}`;
+  return `${status.streak}/${MASTER_STREAK}`;
 }

@@ -24,8 +24,8 @@ export function Questions({ visible = false }: { visible?: boolean }) {
 
   return (
     <main className="page">
-      <p className="eyebrow">{visible ? 'Part B · 見て読む' : 'Part B · 問題一覧'}</p>
-      <h1>正否の記録</h1>
+      <p className="eyebrow">{visible ? 'Part B · Read along' : 'Part B'}</p>
+      <h1>Progress</h1>
       <p className="lede">
         {visible
           ? '英文を見ながら読む練習です。聞こえて繰り返す練習とは、正否を別に数えます。'
@@ -33,7 +33,7 @@ export function Questions({ visible = false }: { visible?: boolean }) {
         {MASTER_STREAK}回連続で正解すると、その問題は理解できたものとします。チェックが付いている問題を優先して出します。
       </p>
       <p className="muted">
-        チェック {checkedCount} · 理解できた {masteredCount} · 全 {SENTENCES.length}
+        Check {checkedCount} · Done {masteredCount} · {SENTENCES.length}
       </p>
       <ul className="question-list">
         {SENTENCES.map((sentence, index) => {
@@ -42,16 +42,16 @@ export function Questions({ visible = false }: { visible?: boolean }) {
           return (
             <li key={sentence.id} className="question-row" data-testid="question-row">
               <span className={status?.checked ? 'mark on' : status?.mastered ? 'mark done' : 'mark'}>
-                {status?.mastered ? '済' : status?.checked ? '✓' : ''}
+                {status?.mastered ? 'OK' : status?.checked ? '✓' : ''}
               </span>
               <span>
                 <strong>
                   {index + 1}. {difficultyLabel(sentence.difficulty)} · {statusLabel(status)}
                 </strong>
-                <small lang="en">{showText ? sentence.text : 'まだ出題前なので、文は隠しています。'}</small>
+                <small lang="en">{showText ? sentence.text : 'Hidden until this item is used.'}</small>
               </span>
               <button type="button" className="btn secondary" onClick={() => start(sentence.id)}>
-                この問題
+                This one
               </button>
             </li>
           );

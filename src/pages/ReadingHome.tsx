@@ -21,21 +21,21 @@ export function ReadingHome() {
 
   return (
     <main className="page">
-      <p className="eyebrow">Versant 練習 · Part A</p>
-      <h1>音読</h1>
+      <p className="eyebrow">Part A</p>
+      <h1>Read</h1>
       <p className="lede">
         画面に英文が8文出ています。音声は番号だけを読みます。その番号の文を、書いてあるとおりに読んでください。
       </p>
       <div className="actions">
         <Link to="/a/practice" className="btn" data-testid="start-reading">
-          練習を始める
+          Start
         </Link>
         <Link to="/a/questions" className="btn secondary">
-          問題の正否
+          Progress
         </Link>
       </div>
       <section className="card">
-        <h2>出題の流れ</h2>
+        <h2>Flow</h2>
         <ol className="steps">
           <li>4文ずつ、内容がつながった組が2つ、最初から見えています。</li>
           <li>「Number four.」のように、読む番号だけが一度読まれます。文そのものは読まれません。</li>
@@ -47,11 +47,11 @@ export function ReadingHome() {
         </p>
       </section>
       <section className="card">
-        <h2>番号の音声</h2>
+        <h2>Voice</h2>
         <p>文は画面にあるので、読み上げるのは番号だけです。先に「Number four.」が聞こえるか確認してください。</p>
         {canSpeak() ? (
           <button type="button" className="btn secondary" data-testid="test-number" onClick={() => void onTestNumber()}>
-            {audioState === 'playing' ? '停止' : '番号を読み上げる'}
+            {audioState === 'playing' ? 'Stop' : 'Play a number'}
           </button>
         ) : (
           <p className="note">このブラウザは読み上げに対応していません。Chrome で開いてください。</p>
@@ -64,7 +64,7 @@ export function ReadingHome() {
         {audioState === 'failed' ? <p className="note">番号を読み上げられませんでした。もう一度試してください。</p> : null}
       </section>
       <section className="card">
-        <h2>採点</h2>
+        <h2>Scoring</h2>
         <p>指定された1文と、認識した読みを比べます。8文のうち一番近い文を正解にはしません。</p>
         <ul>
           <li>正解は、その文の単語が順に揃っていることです。認識が余分な語を足しても、抜けと言い換えがなければ正解です。</li>

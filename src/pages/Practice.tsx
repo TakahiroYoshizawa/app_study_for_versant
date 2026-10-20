@@ -231,31 +231,25 @@ export function Practice({ visible = false }: { visible?: boolean }) {
     return (
       <div className="exam-shell">
         <div className="exam-bar">
-          <span>{showText ? 'Part B · 見て読む' : 'Part B · リピート'}</span>
+          <span>{showText ? 'Part B · Read along' : 'Part B · Repeat'}</span>
           <button type="button" className="text-btn" onClick={() => setAborting(true)}>
-            中断
+            Stop
           </button>
         </div>
         <section className="exam" data-phase={phase} data-testid="phase">
           <p className="eyebrow">
-            {phase === 'instruction' ? '指示' : phase === 'listen' ? 'リスニング' : phase === 'cue' ? '合図' : '回答'}
+            {phase === 'instruction' ? 'Instruction' : phase === 'listen' ? 'Listen' : phase === 'cue' ? 'Cue' : 'Speak'}
           </p>
           <h1>
             {phase === 'instruction'
-              ? showText
-                ? '文を読んでください'
-                : '指示を聞いてください'
+              ? 'Listen'
               : phase === 'listen'
-                ? '文を聞いてください'
+                ? 'Listen'
                 : phase === 'cue'
-                  ? showText
-                    ? '読み始めてください'
-                    : '始めてください'
+                  ? 'Go'
                   : phase === 'saving'
-                    ? '記録しています'
-                    : showText
-                      ? '画面の文を読んでください'
-                      : '繰り返してください'}
+                    ? 'Saving'
+                    : 'Speak'}
           </h1>
           {showText && prompt ? (
             <p className="prompt-sentence" lang="en" data-testid="prompt-sentence">
@@ -292,7 +286,7 @@ export function Practice({ visible = false }: { visible?: boolean }) {
                 {tick.interim || '話し始めると、ここに認識した文字が出ます。'}
               </p>
               <button type="button" className="btn secondary" data-testid="finish-speaking" onClick={() => manualStop.current?.()}>
-                話し終えた
+                Done
               </button>
             </>
           ) : null}
@@ -300,7 +294,7 @@ export function Practice({ visible = false }: { visible?: boolean }) {
         {aborting ? (
           <div className="dialog-backdrop">
             <div className="dialog" role="dialog" aria-modal="true" aria-labelledby="abort-title">
-              <h2 id="abort-title">この問題を中断しますか？</h2>
+              <h2 id="abort-title">Stop this item?</h2>
               <p>ここまでの回答は記録されません。</p>
               <div className="actions">
                 <button
@@ -311,10 +305,10 @@ export function Practice({ visible = false }: { visible?: boolean }) {
                     navigate('/b');
                   }}
                 >
-                  中断する
+                  Stop
                 </button>
                 <button type="button" className="btn secondary" onClick={() => setAborting(false)}>
-                  続ける
+                  Continue
                 </button>
               </div>
             </div>
@@ -326,8 +320,8 @@ export function Practice({ visible = false }: { visible?: boolean }) {
 
   return (
     <main className="page">
-      <p className="eyebrow">準備</p>
-      <h1>マイクの確認</h1>
+      <p className="eyebrow">Setup</p>
+      <h1>Microphone</h1>
       <p className="lede">
         {visible
           ? '最初に英文が読まれます。文は画面に出たままなので、そのあと見ながら読んでください。'
@@ -339,14 +333,14 @@ export function Practice({ visible = false }: { visible?: boolean }) {
       {micError ? <p className="note">{micError}</p> : null}
       {stream ? (
         <section className="card">
-          <h2>入力レベル</h2>
+          <h2>Level</h2>
           <div className="meter" aria-hidden="true">
             <span style={{ width: `${Math.round(level * 100)}%` }} />
           </div>
           <p className="muted">バーが動けば、マイクは入っています。</p>
           <div className="actions">
             <button type="button" className="btn secondary" onClick={onTestMic}>
-              {testing ? '聞き取りを止める' : '試しに話す'}
+              {testing ? 'Stop' : 'Try speaking'}
             </button>
           </div>
           <p className="caption" lang="en">
@@ -356,21 +350,21 @@ export function Practice({ visible = false }: { visible?: boolean }) {
       ) : (
         <div className="actions">
           <button type="button" className="btn" data-testid="enable-mic" onClick={onEnableMic}>
-            マイクをオンにする
+            Turn mic on
           </button>
         </div>
       )}
       {stream && supported ? (
         <div className="actions">
           <button type="button" className="btn" data-testid="begin" onClick={() => onBegin(true)}>
-            問題を始める
+            Start
           </button>
         </div>
       ) : null}
       {micFailed || !supported ? (
         <div className="actions">
           <button type="button" className="btn secondary" data-testid="begin-without-mic" onClick={() => onBegin(false)}>
-            文を聞くだけ始める
+            Listen only
           </button>
         </div>
       ) : null}

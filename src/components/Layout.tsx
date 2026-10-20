@@ -17,11 +17,11 @@ export function Layout() {
             </NavLink>
             <nav className="nav">
               <NavLink to="/" end>
-                ホーム
+                Home
               </NavLink>
-              <NavLink to="/a">音読</NavLink>
-              <NavLink to="/b">リピート</NavLink>
-              <NavLink to="/history">記録</NavLink>
+              <NavLink to="/a">Read</NavLink>
+              <NavLink to="/b">Repeat</NavLink>
+              <NavLink to="/history">History</NavLink>
             </nav>
           </div>
         </header>

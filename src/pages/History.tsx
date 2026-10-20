@@ -17,13 +17,13 @@ export function History() {
 
   return (
     <main className="page">
-      <p className="eyebrow">記録</p>
-      <h1>これまでの回答</h1>
+      <p className="eyebrow">Log</p>
+      <h1>History</h1>
       {attempts.length === 0 ? (
         <section className="card">
           <p>まだ記録がありません。</p>
           <Link to="/practice" className="btn">
-            練習を始める
+            Start
           </Link>
         </section>
       ) : (
@@ -39,22 +39,22 @@ export function History() {
                   <small>
                     {formatWhen(attempt.createdAt)} ·{' '}
                     {attempt.part === 'A'
-                      ? `Part A · ${attempt.readingNumber ?? ''}番`
+                      ? `Part A · ${attempt.readingNumber ?? ''}`
                       : attempt.part === 'B-read'
-                        ? `見て読む · ${difficultyLabel(attempt.difficulty)}`
+                        ? `Read along · ${difficultyLabel(attempt.difficulty)}`
                         : `Part B · ${difficultyLabel(attempt.difficulty)}`}{' '}
                     ·{' '}
-                    {attempt.noResponse ? '無回答' : attemptWasCorrect(attempt) ? '正解' : '不正解'}
+                    {attempt.noResponse ? 'No response' : attemptWasCorrect(attempt) ? 'Correct' : 'Incorrect'}
                   </small>
                 </span>
               </Link>
               {pendingId === attempt.id ? (
                 <button type="button" className="text-btn danger-text" onClick={() => remove(attempt.id)}>
-                  削除する
+                  Delete
                 </button>
               ) : (
                 <button type="button" className="text-btn" onClick={() => setPendingId(attempt.id)}>
-                  削除
+                  Delete
                 </button>
               )}
             </li>
