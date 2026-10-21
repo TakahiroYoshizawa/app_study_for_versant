@@ -1,5 +1,6 @@
 import { findReadingSentence, findReadingSet, numberCue, READING_SETS, type ReadingSentence, type ReadingSet } from '../data/readings';
 import type { Attempt } from '../types';
+import { forLevel } from './level';
 import { progressByItem } from './progress';
 import { cancelSpeech, speakOnce } from './speech';
 
@@ -77,20 +78,17 @@ export function cancelReading(): void {
   cancelSpeech();
 }
 
-export function selectReadingSet(attempts: Attempt[]): ReadingSet {
+export function selectReadingSet(attempts: Attempt[], excludeId?: string): ReadingSet {
   const progress = progressByItem(attempts);
-  const ranked = READING_SETS.map((set) => ({
+  const bank = forLevel(READING_SETS);
+  const available = excludeId ? bank.filter((set) => set.id !== excludeId) : bank;
+  const sets = available.length > 0 ? available : bank;
+  const ranked = sets.map((set) => ({
     set,
-    checked: set.sentences.filter((sentence) => progress.get(sentence.id)?.checked).length,
-    unmastered: set.sentences.filter((sentence) => !progress.get(sentence.id)?.mastered).length,
+    untouched: set.sentences.filter((sentence) => (progress.get(sentence.id)?.attempts ?? 0) === 0).length,
   }));
-  ranked.sort((a, b) => b.checked - a.checked || b.unmastered - a.unmastered);
-  const best = ranked[0];
-  const pool =
-    best && best.checked > 0
-      ? ranked.filter((item) => item.checked === best.checked)
-      : ranked.filter((item) => item.unmastered > 0);
-  const bag = pool.length > 0 ? pool : ranked;
-  const index = Math.floor(Math.random() * bag.length);
-  return bag[index]?.set ?? READING_SETS[0];
+  const bestUntouched = ranked.reduce((best, item) => Math.max(best, item.untouched), 0);
+  const pool = bestUntouched > 0 ? ranked.filter((item) => item.untouched === bestUntouched) : ranked;
+  const index = Math.floor(Math.random() * pool.length);
+  return pool[index]?.set ?? sets[0] ?? READING_SETS[0];
 }

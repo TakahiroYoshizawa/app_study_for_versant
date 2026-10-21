@@ -53,7 +53,7 @@ export function GeminiCheck() {
       <h1>採点の確認</h1>
       <p className="lede">依頼した採点は、この端末に残します。画面を離れても、戻ってから結果を確認できます。</p>
       {uploadingRunIds.length > 0 ? (
-        <p className="note">録音を送っています。送り終わるまで、このタブは開いたままにしてください。受付が終わると、ここに表示されます。</p>
+        <p className="note">採点しています。結果が出るまで、このタブは開いたままにしてください。</p>
       ) : null}
       {jobs.some((job) => job.status === 'pending') &&
       (!apiKey.trim() || Object.values(messages).some((message) => message.includes('API') || message.includes('キー'))) ? (

@@ -11,7 +11,7 @@ export function GeminiBanner() {
   if (!uploading && !pending && !unseen) return null;
 
   let message = 'Geminiの採点結果が出ています。';
-  if (uploading) message = '録音を送っています。送り終わるまで、このタブは開いたままにしてください。';
+  if (uploading) message = 'Geminiが採点しています。結果が出るまで、このタブは開いたままにしてください。';
   else if (pending) message = 'Geminiの採点を受け付けています。離れても、戻ってから確認できます。';
 
   return (

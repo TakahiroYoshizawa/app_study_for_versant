@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { LevelPicker } from '../components/LevelPicker';
 import { READING_SETS, situationLabel } from '../data/readings';
+import { forLevel, usePracticeLevel } from '../lib/level';
 import { MASTER_STREAK, progressByItem, statusLabel } from '../lib/progress';
 import { openPracticeRun } from '../lib/practice-run';
 import { beginReading, beginReadingSet } from '../lib/reading-session';
@@ -9,6 +11,8 @@ import { loadAttempts } from '../lib/storage';
 
 export function ReadingQuestions() {
   const navigate = useNavigate();
+  const { level } = usePracticeLevel();
+  const sets = forLevel(READING_SETS, level);
   const [attempts] = useState(() => loadAttempts());
   const progress = progressByItem(attempts);
 
@@ -32,7 +36,8 @@ export function ReadingQuestions() {
       <p className="lede">
         間違えた文にはチェックが付きます。{MASTER_STREAK}回連続で正解すると、その文は理解できたものとします。
       </p>
-      {READING_SETS.map((set) => {
+      <LevelPicker />
+      {sets.map((set) => {
         const checked = set.sentences.filter((sentence) => progress.get(sentence.id)?.checked).length;
         const mastered = set.sentences.filter((sentence) => progress.get(sentence.id)?.mastered).length;
         return (

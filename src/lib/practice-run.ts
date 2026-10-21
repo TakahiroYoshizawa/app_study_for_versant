@@ -1,11 +1,24 @@
+import { BUILDS } from '../data/builds';
+import { OPEN_SESSION_SIZE } from '../data/open-questions';
+import { QUESTIONS } from '../data/questions';
+import { STORIES } from '../data/stories';
 import type { Attempt, DiffOp } from '../types';
+import { forLevel } from './level';
 import { deleteAttempt, loadAttempt, loadAttempts } from './storage';
 
 const RUN_KEY = 'versant.practice.run';
 const SESSIONS_KEY = 'versant.practice.sessions';
 const MAX_SESSIONS = 60;
 
-export type PracticePart = 'A' | 'B' | 'B-read';
+export type PracticePart = 'A' | 'B' | 'B-read' | 'C' | 'D' | 'E' | 'F';
+
+export type StoryPointStatus = 'covered' | 'partial' | 'missing';
+
+export type StoryPointReview = {
+  id: string;
+  label: string;
+  status: StoryPointStatus;
+};
 
 export type WordHearing = 'clear' | 'uncertain' | 'missing';
 
@@ -30,6 +43,8 @@ export type LiteralReview = {
   restart: boolean;
   pronunciation: PronunciationNote[];
   unavailable?: string;
+  storyPoints?: StoryPointReview[];
+  storyNote?: string;
 };
 
 export type PracticeRun = {
@@ -45,11 +60,20 @@ export type SavedSession = PracticeRun & {
 };
 
 export function practiceRunSize(part: PracticePart): number {
-  return part === 'A' ? 8 : 10;
+  if (part === 'A') return 8;
+  if (part === 'C') return forLevel(QUESTIONS).length;
+  if (part === 'D') return forLevel(BUILDS).length;
+  if (part === 'E') return Math.min(3, Math.max(1, forLevel(STORIES).length));
+  if (part === 'F') return OPEN_SESSION_SIZE;
+  return 10;
 }
 
 export function practicePartLabel(part: PracticePart): string {
   if (part === 'A') return 'Part A';
+  if (part === 'C') return 'Part C';
+  if (part === 'D') return 'Part D';
+  if (part === 'E') return 'Part E';
+  if (part === 'F') return 'Part F';
   if (part === 'B-read') return 'Read along';
   return 'Part B';
 }
@@ -61,7 +85,7 @@ export function loadPracticeRun(): PracticeRun | null {
     const parsed: unknown = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
     const run = parsed as Partial<PracticeRun>;
-    if (run.part !== 'A' && run.part !== 'B' && run.part !== 'B-read') return null;
+    if (!isPracticePart(run.part)) return null;
     if (!Array.isArray(run.attemptIds) || typeof run.id !== 'string') return null;
     return {
       id: run.id,
@@ -103,6 +127,14 @@ export function savePracticeReviews(reviews: LiteralReview[], run: PracticeRun):
 
 export function loadSavedSession(id: string): SavedSession | null {
   return sessionsForHistory().find((session) => session.id === id) ?? null;
+}
+
+export function reviewForAttempt(attemptId: string): LiteralReview | null {
+  for (const session of sessionsForHistory()) {
+    const review = session.reviews?.find((item) => item.attemptId === attemptId);
+    if (review) return review;
+  }
+  return null;
 }
 
 export function sessionsForHistory(): SavedSession[] {
@@ -229,23 +261,48 @@ function chunkLoose(attempts: Attempt[]): SavedSession[] {
   return sessions;
 }
 
+function isPracticePart(value: unknown): value is PracticePart {
+  return value === 'A' || value === 'B' || value === 'B-read' || value === 'C' || value === 'D' || value === 'E' || value === 'F';
+}
+
 function isSavedSession(value: unknown): value is SavedSession {
   if (!value || typeof value !== 'object') return false;
   const session = value as Partial<SavedSession>;
-  if (session.part !== 'A' && session.part !== 'B' && session.part !== 'B-read') return false;
+  if (!isPracticePart(session.part)) return false;
   if (!Array.isArray(session.attemptIds) || typeof session.id !== 'string' || typeof session.createdAt !== 'string') return false;
   return true;
 }
 
+function takeStoryPoints(value: unknown): StoryPointReview[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const points: StoryPointReview[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as { id?: unknown; label?: unknown; status?: unknown };
+    if (typeof row.id !== 'string' || typeof row.label !== 'string') continue;
+    if (row.status !== 'covered' && row.status !== 'partial' && row.status !== 'missing') continue;
+    const id = row.id.trim();
+    const label = row.label.trim();
+    if (!id || !label) continue;
+    points.push({ id, label, status: row.status });
+  }
+  return points.length > 0 ? points : undefined;
+}
+
 function normalizeReviews(value: unknown): LiteralReview[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const reviews = value.filter(isLiteralReview).map((review) => ({
-    ...review,
-    words: Array.isArray(review.words) ? review.words : [],
-    extras: Array.isArray(review.extras) ? review.extras : [],
-    restart: review.restart === true,
-    pronunciation: Array.isArray(review.pronunciation) ? review.pronunciation : [],
-  }));
+  const reviews = value.filter(isLiteralReview).map((review) => {
+    const storyNote = typeof review.storyNote === 'string' ? review.storyNote.trim().slice(0, 400) : '';
+    return {
+      ...review,
+      words: Array.isArray(review.words) ? review.words : [],
+      extras: Array.isArray(review.extras) ? review.extras : [],
+      restart: review.restart === true,
+      pronunciation: Array.isArray(review.pronunciation) ? review.pronunciation : [],
+      storyPoints: takeStoryPoints(review.storyPoints),
+      storyNote: storyNote || undefined,
+    };
+  });
   return reviews.length > 0 ? reviews : undefined;
 }
 

@@ -34,8 +34,17 @@ export async function captureResponse(options: {
   isCancelled: () => boolean;
   onTick: (tick: CaptureTick) => void;
   manualStop: { current: (() => void) | null };
+  responseMs?: number;
+  startLimitMs?: number | null;
+  silenceMs?: number;
+  endOnSilence?: boolean;
 }): Promise<CaptureResult | null> {
   const { stream, isCancelled, onTick, manualStop } = options;
+  const responseMs = options.responseMs ?? RESPONSE_MS;
+  const startLimitMs = options.startLimitMs === undefined ? START_LIMIT_MS : options.startLimitMs;
+  const endOnSilence = options.endOnSilence !== false;
+  const silenceWithWords = options.silenceMs ?? 1500;
+  const silenceWithoutWords = options.silenceMs != null ? options.silenceMs + 700 : 2200;
   const recognitionAvailable = recognitionSupported();
   const startedAt = performance.now();
   let settled = false;
@@ -218,16 +227,16 @@ export async function captureResponse(options: {
         }
       }
       onTick({
-        remainingMs: Math.max(0, RESPONSE_MS - elapsed),
-        startRemainingMs: Math.max(0, START_LIMIT_MS - elapsed),
+        remainingMs: Math.max(0, responseMs - elapsed),
+        startRemainingMs: startLimitMs == null ? 0 : Math.max(0, startLimitMs - elapsed),
         started: speechStarted,
         interim: latestTranscript,
       });
       const quietFor = now - lastActivity;
-      const silenceNeed = latestTranscript.trim() ? 1500 : 2200;
-      if (!speechStarted && elapsed >= START_LIMIT_MS) finish('no-response');
-      else if (speechStarted && quietFor >= silenceNeed && now - firstSpeechAt >= 500) finish('silence');
-      else if (elapsed >= RESPONSE_MS) finish('timeout');
+      const silenceNeed = latestTranscript.trim() ? silenceWithWords : silenceWithoutWords;
+      if (startLimitMs != null && !speechStarted && elapsed >= startLimitMs) finish('no-response');
+      else if (endOnSilence && speechStarted && quietFor >= silenceNeed && now - firstSpeechAt >= 500) finish('silence');
+      else if (elapsed >= responseMs) finish('timeout');
     }, 100);
   });
 }

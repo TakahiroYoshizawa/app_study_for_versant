@@ -152,7 +152,7 @@ function isJob(value: unknown): value is GeminiJob {
   if (!value || typeof value !== 'object') return false;
   const job = value as Partial<GeminiJob>;
   if (typeof job.interactionId !== 'string' || typeof job.runId !== 'string' || typeof job.createdAt !== 'string') return false;
-  if (job.part !== 'A' && job.part !== 'B' && job.part !== 'B-read') return false;
+  if (job.part !== 'A' && job.part !== 'B' && job.part !== 'B-read' && job.part !== 'D' && job.part !== 'E' && job.part !== 'F') return false;
   if (job.status !== 'pending' && job.status !== 'done' && job.status !== 'error') return false;
   if (!Array.isArray(job.attemptIds) || job.attemptIds.some((id) => typeof id !== 'string')) return false;
   if (job.reviews != null && (!Array.isArray(job.reviews) || job.reviews.some((review) => !isLiteralReview(review)))) return false;

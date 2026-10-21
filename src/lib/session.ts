@@ -1,5 +1,7 @@
 import { SENTENCES } from '../data/sentences';
-import type { Sentence } from '../types';
+import type { Attempt, Sentence } from '../types';
+import { forLevel } from './level';
+import { loadPracticeRun } from './practice-run';
 import { selectNextSentence } from './progress';
 import { cancelSpeech, speakPassage } from './speech';
 import { loadAttempts, loadLastReadSentenceId, loadLastSentenceId, saveLastReadSentenceId, saveLastSentenceId } from './storage';
@@ -29,13 +31,20 @@ export function beginItem(sentenceId?: string, visible = false): LiveSession {
     active.cancelled = true;
     cancelSpeech();
   }
-  const bank = visible ? SENTENCES.map((sentence) => ({ ...sentence, id: `read:${sentence.id}` })) : SENTENCES;
+  const attempts = loadAttempts();
+  const source = forLevel(SENTENCES);
+  const bank = visible ? source.map((sentence) => ({ ...sentence, id: `read:${sentence.id}` })) : source;
   const requested = sentenceId
     ? bank.find((sentence) => sentence.id === sentenceId || sentence.id === `read:${sentenceId}`)
     : undefined;
   const sentence =
     requested ??
-    selectNextSentence(bank, visible ? loadLastReadSentenceId() : loadLastSentenceId(), loadAttempts());
+    selectNextSentence(
+      bank,
+      visible ? loadLastReadSentenceId() : loadLastSentenceId(),
+      attempts,
+      visible ? readAlongUsedIds(attempts) : undefined,
+    );
   if (visible) saveLastReadSentenceId(sentence.id);
   else saveLastSentenceId(sentence.id);
   const session: LiveSession = {
@@ -58,6 +67,17 @@ export function beginItem(sentenceId?: string, visible = false): LiveSession {
   })();
   active = session;
   return session;
+}
+
+function readAlongUsedIds(attempts: Attempt[]): Set<string> {
+  const run = loadPracticeRun();
+  if (!run || run.closed || run.part !== 'B-read' || run.attemptIds.length === 0) return new Set();
+  const wanted = new Set(run.attemptIds);
+  const used = new Set<string>();
+  for (const attempt of attempts) {
+    if (wanted.has(attempt.id)) used.add(attempt.sentenceId);
+  }
+  return used;
 }
 
 export function cancelActive(): void {

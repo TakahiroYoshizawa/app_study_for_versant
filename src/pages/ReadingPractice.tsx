@@ -10,15 +10,7 @@ import { likelyReadAnother } from '../lib/reading-score';
 import { appendPracticeAttempt, openPracticeRun } from '../lib/practice-run';
 import { beginReading, beginReadingSet, cancelReading, nextAskNumber, peekReading, selectReadingSet, type ReadingLive } from '../lib/reading-session';
 import { scoreRepeat } from '../lib/score';
-import {
-  ensureMic,
-  getAudioContext,
-  listenFor,
-  playBeep,
-  recognitionSupported,
-  releaseMic,
-  wait,
-} from '../lib/speech';
+import { ensureMic, getAudioContext, playBeep, releaseMic, wait } from '../lib/speech';
 import { loadAttempts, saveAttempt } from '../lib/storage';
 import type { Attempt } from '../types';
 
@@ -36,68 +28,31 @@ export function ReadingPractice() {
   const location = useLocation();
   const autostart = Boolean((location.state as { autostart?: boolean } | null)?.autostart);
   const { setExam } = useContext(ExamModeContext);
-  const supported = recognitionSupported();
-  const [step, setStep] = useState<'mic' | 'run'>(autostart && peekReading() ? 'run' : 'mic');
   const [phase, setPhase] = useState<Phase>('number');
-  const [live, setLive] = useState<ReadingLive | null>(() => peekReading());
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [level, setLevel] = useState(0);
-  const [micFailed, setMicFailed] = useState(false);
-  const [micError, setMicError] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testText, setTestText] = useState('');
+  const [live, setLive] = useState<ReadingLive | null>(() => (autostart ? peekReading() : null));
   const [tick, setTick] = useState<CaptureTick>(INITIAL_TICK);
   const [aborting, setAborting] = useState(false);
   const mounted = useRef(true);
   const runId = useRef(0);
   const manualStop = useRef<(() => void) | null>(null);
-  const stopTest = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    setExam(step === 'run');
+    setExam(true);
     return () => setExam(false);
-  }, [setExam, step]);
+  }, [setExam]);
 
   useEffect(() => {
     return () => {
       mounted.current = false;
-      stopTest.current?.();
       cancelReading();
       releaseMic();
     };
   }, []);
 
-  useEffect(() => {
-    if (step !== 'mic' || !stream) return;
-    const ctx = getAudioContext();
-    const source = ctx.createMediaStreamSource(stream);
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 512;
-    source.connect(analyser);
-    const samples = new Uint8Array(analyser.fftSize);
-    let frame = 0;
-    const draw = () => {
-      analyser.getByteTimeDomainData(samples);
-      let sum = 0;
-      for (const value of samples) {
-        const centered = (value - 128) / 128;
-        sum += centered * centered;
-      }
-      setLevel(Math.min(1, Math.sqrt(sum / samples.length) * 5));
-      frame = window.requestAnimationFrame(draw);
-    };
-    frame = window.requestAnimationFrame(draw);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      source.disconnect();
-    };
-  }, [step, stream]);
-
   async function continueSession(session: ReadingLive, allowMic: boolean) {
     const id = ++runId.current;
     const alive = () => mounted.current && !session.cancelled && runId.current === id;
     setLive(session);
-    setStep('run');
     setPhase('number');
     setTick(INITIAL_TICK);
     setAborting(false);
@@ -184,59 +139,28 @@ export function ReadingPractice() {
       navigate(`/history/${saved.id}`, { replace: true });
       return;
     }
-    const setComplete = nextAskNumber(session.askOrder, session.item.number) == null;
-    const run = appendPracticeAttempt('A', saved.id, setComplete);
-    navigate(run.closed ? '/session' : `/history/${saved.id}`, { replace: true });
+    const upcoming = nextAskNumber(session.askOrder, session.item.number);
+    const run = appendPracticeAttempt('A', saved.id, upcoming == null);
+    if (upcoming != null && !run.closed) {
+      const next = beginReading(session.set.id, upcoming, true, session.askOrder);
+      void continueSession(next, allowMic && Boolean(mic));
+      return;
+    }
+    navigate('/session', { replace: true });
   }
 
   useEffect(() => {
-    if (!autostart) return;
-    const session = peekReading();
-    if (!session) return;
-    void continueSession(session, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autostart]);
-
-  function onEnableMic() {
-    setMicError('');
-    void ensureMic().then((next) => {
-      if (!mounted.current) return;
-      if (!next) {
-        setMicFailed(true);
-        setMicError('マイクを使えません。ブラウザのサイト設定でマイクを許可してください。');
-        return;
-      }
-      getAudioContext();
-      setStream(next);
-      setMicFailed(false);
-    });
-  }
-
-  function onTestMic() {
-    if (testing) {
-      stopTest.current?.();
-      stopTest.current = null;
-      setTesting(false);
+    const existing = autostart ? peekReading() : null;
+    if (existing) {
+      void continueSession(existing, true);
       return;
     }
-    setTestText('');
-    setTesting(true);
-    stopTest.current = listenFor(4000, setTestText);
-    window.setTimeout(() => {
-      if (!mounted.current) return;
-      stopTest.current?.();
-      stopTest.current = null;
-      setTesting(false);
-    }, 4000);
-  }
-
-  function onBegin(allowMic: boolean) {
     getAudioContext();
     openPracticeRun('A');
     const set = selectReadingSet(loadAttempts());
-    const session = beginReadingSet(set.id);
-    void continueSession(session, allowMic);
-  }
+    void continueSession(beginReadingSet(set.id), true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function retryCue() {
     if (!live) return;
@@ -244,10 +168,13 @@ export function ReadingPractice() {
     void continueSession(session, true);
   }
 
-  if (step === 'run' && live) {
-    const seconds = Math.ceil(tick.remainingMs / 1000);
-    const startSeconds = Math.ceil(tick.startRemainingMs / 1000);
-    return (
+  if (!live) {
+    return <div className="exam-shell" data-testid="phase" />;
+  }
+
+  const seconds = Math.ceil(tick.remainingMs / 1000);
+  const startSeconds = Math.ceil(tick.startRemainingMs / 1000);
+  return (
       <div className="exam-shell">
         <div className="exam-bar">
           <span>
@@ -257,41 +184,33 @@ export function ReadingPractice() {
             Stop
           </button>
         </div>
+        <ReadingStatus
+          number={live.item.number}
+          remainingMs={phase === 'respond' || phase === 'saving' ? tick.remainingMs : null}
+          urgent={seconds <= 5 && (phase === 'respond' || phase === 'saving')}
+          hint={
+            phase === 'respond' && !tick.started
+              ? `読み始めまで ${startSeconds} 秒`
+              : phase === 'respond' || phase === 'saving'
+                ? '指定された番号の文を、そのまま読んでください。'
+                : phase === 'number'
+                  ? '番号を聞いてください。'
+                  : phase === 'cue'
+                    ? '合図のあと、その番号の文を読みます。'
+                    : phase === 'cue-failed'
+                      ? '番号を読み上げられませんでした。'
+                      : 'Listen'
+          }
+        />
         <section className="exam reading" data-phase={phase} data-testid="phase">
-          <p className="eyebrow">
-            {phase === 'number' ? 'Number' : phase === 'cue' ? 'Cue' : phase === 'cue-failed' ? 'Voice' : 'Read'}
-          </p>
-          <h1>
-            {phase === 'number'
-              ? 'Listen'
-              : phase === 'cue'
-                ? 'Go'
-                : phase === 'cue-failed'
-                  ? 'No number'
-                  : phase === 'saving'
-                    ? 'Saving'
-                    : `Read ${live.item.number}`}
-          </h1>
-          {phase === 'respond' || phase === 'saving' ? (
-            <p className="reading-number" data-testid="reading-number">
-              {live.item.number}
-            </p>
-          ) : null}
           {phase === 'cue-failed' ? (
             <button type="button" className="btn" onClick={retryCue}>
               Play number again
             </button>
           ) : null}
+          <ReadingBoard set={live.set} emphasize={phase === 'respond' || phase === 'saving' ? live.item.number : undefined} />
           {phase === 'respond' || phase === 'saving' ? (
             <>
-              <TimerRing remainingMs={tick.remainingMs} urgent={seconds <= 5} />
-              {!tick.started && phase === 'respond' ? (
-                <p className={startSeconds <= 2 ? 'start-limit warn-text' : 'start-limit'}>
-                  読み始めまで {startSeconds} 秒
-                </p>
-              ) : (
-                <p className="start-limit">指定された番号の文を、そのまま読んでください。</p>
-              )}
               <p className="caption" lang="en" data-testid="live-caption">
                 {tick.interim || '読み始めると、ここに認識した文字が出ます。'}
               </p>
@@ -300,7 +219,6 @@ export function ReadingPractice() {
               </button>
             </>
           ) : null}
-          <ReadingBoard set={live.set} />
         </section>
         {aborting ? (
           <div className="dialog-backdrop">
@@ -327,75 +245,35 @@ export function ReadingPractice() {
         ) : null}
       </div>
     );
-  }
-
-  return (
-    <main className="page">
-      <p className="eyebrow">Part A</p>
-      <h1>Microphone</h1>
-      <p className="lede">番号が読まれたら、画面のその文をそのまま読んでください。採点には Chrome の音声認識を使います。</p>
-      {!supported ? (
-        <p className="note">このブラウザでは音声認識が使えません。Chrome で開くと、読んだ文を採点できます。</p>
-      ) : null}
-      {micError ? <p className="note">{micError}</p> : null}
-      {stream ? (
-        <section className="card">
-          <h2>Level</h2>
-          <div className="meter" aria-hidden="true">
-            <span style={{ width: `${Math.round(level * 100)}%` }} />
-          </div>
-          <p className="muted">バーが動けば、マイクは入っています。</p>
-          <div className="actions">
-            <button type="button" className="btn secondary" onClick={onTestMic}>
-              {testing ? 'Stop' : 'Try speaking'}
-            </button>
-          </div>
-          <p className="caption" lang="en">{testing && !testText ? 'I like tea. と言ってみてください。' : testText || 'まだ認識していません。'}</p>
-        </section>
-      ) : (
-        <div className="actions">
-          <button type="button" className="btn" data-testid="enable-mic" onClick={onEnableMic}>
-            Turn mic on
-          </button>
-        </div>
-      )}
-      {stream && supported ? (
-        <div className="actions">
-          <button type="button" className="btn" data-testid="begin-reading" onClick={() => onBegin(true)}>
-            Start set
-          </button>
-        </div>
-      ) : null}
-      {micFailed || !supported ? (
-        <div className="actions">
-          <button type="button" className="btn secondary" onClick={() => onBegin(false)}>
-            Hear numbers only
-          </button>
-        </div>
-      ) : null}
-    </main>
-  );
 }
 
-function TimerRing({ remainingMs, urgent }: { remainingMs: number; urgent: boolean }) {
-  const radius = 52;
-  const circ = 2 * Math.PI * radius;
-  const progress = Math.min(1, Math.max(0, remainingMs / 15_000));
-  const seconds = Math.ceil(remainingMs / 1000);
+function ReadingStatus({
+  number,
+  remainingMs,
+  urgent,
+  hint,
+}: {
+  number: number;
+  remainingMs: number | null;
+  urgent: boolean;
+  hint: string;
+}) {
+  const seconds = remainingMs == null ? null : Math.ceil(remainingMs / 1000);
+  const progress = remainingMs == null ? 0 : Math.min(1, Math.max(0, remainingMs / 15_000));
   return (
-    <div className={urgent ? 'timer urgent' : 'timer'} data-testid="timer">
-      <svg viewBox="0 0 120 120" aria-hidden="true">
-        <circle cx="60" cy="60" r={radius} className="ring-track" />
-        <circle
-          cx="60"
-          cy="60"
-          r={radius}
-          className="ring-value"
-          strokeDasharray={circ}
-          strokeDashoffset={circ * (1 - progress)}
-        />
-      </svg>
-      <strong>{seconds}</strong>
+    <div className={urgent ? 'read-status urgent' : 'read-status'} data-testid="timer">
+      <div className="read-status-row">
+        <span>{hint}</span>
+        <strong>
+          <span data-testid="reading-number">{number}</span>
+          <span className="read-status-seconds" aria-hidden={seconds == null}>
+            {seconds == null ? '15s' : `${seconds}s`}
+          </span>
+        </strong>
+      </div>
+      <div className="read-status-track" aria-hidden="true">
+        <span style={{ width: `${Math.round(progress * 100)}%` }} />
+      </div>
     </div>
   );
 }

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatWhen } from '../lib/format';
+import { OPEN_PASS, openSummary } from '../lib/open-score';
 import { attemptWasCorrect } from '../lib/progress';
 import { deleteSavedSession, sessionsForHistory, type SavedSession } from '../lib/practice-run';
+import { getAudioContext } from '../lib/speech';
 import { loadAttempt } from '../lib/storage';
 
 export function History() {
@@ -19,11 +21,11 @@ export function History() {
     <main className="page">
       <p className="eyebrow">記録</p>
       <h1>まとめ</h1>
-      <p className="lede">10問程度のセッションごとに、採点と Gemini の聞き取りを残します。</p>
+      <p className="lede">セッションが終わったところで、採点と Gemini の聞き取りを残します。</p>
       {sessions.length === 0 ? (
         <section className="card">
           <p>まだ記録がありません。</p>
-          <Link to="/practice" className="btn">
+          <Link to="/practice" className="btn" onClick={() => getAudioContext()}>
             練習を始める
           </Link>
         </section>
@@ -34,16 +36,18 @@ export function History() {
             return (
               <li key={session.id} className="history-row" data-testid="history-item">
                 <Link to={`/session/${session.id}`}>
-                  <span className={summary.correct === summary.total && summary.total > 0 ? 'history-score' : 'history-score bad'}>
-                    {summary.correct}/{summary.total}
+                  <span className={(summary.open ? summary.good : summary.correct === summary.total && summary.total > 0) ? 'history-score' : 'history-score bad'}>
+                    {summary.badge ?? `${summary.correct}/${summary.total}`}
                   </span>
                   <span>
                     <strong>
                       {partLabel(session.part)} · {session.closed ? 'まとめ' : '途中'}
                     </strong>
                     <small>
-                      {formatWhen(session.createdAt)} · 端末 {summary.correct}/{summary.total} 正解
-                      {summary.gemini ? ` · Gemini ${summary.gemini}` : ' · Gemini 未依頼'}
+                      {formatWhen(session.createdAt)}
+                      {summary.open
+                        ? ` · ${summary.gemini}`
+                        : ` · 端末 ${summary.correct}/${summary.total} 正解${summary.gemini ? ` · Gemini ${summary.gemini}` : ' · Gemini 未依頼'}`}
                     </small>
                   </span>
                 </Link>
@@ -65,13 +69,42 @@ export function History() {
   );
 }
 
-function summarize(session: SavedSession): { correct: number; total: number; gemini: string | null } {
+function summarize(session: SavedSession): { correct: number; total: number; gemini: string | null; badge?: string; open?: boolean; good?: boolean } {
   const attempts = session.attemptIds
     .map((id) => loadAttempt(id))
     .filter((attempt) => attempt != null);
+  if (session.part === 'F') {
+    const stats = openSummary(attempts);
+    return {
+      correct: stats.passed,
+      total: stats.scored,
+      gemini: stats.mean == null ? '未採点' : `練習点 ${stats.mean}${stats.unscored > 0 ? ` · 未採点 ${stats.unscored}` : ''}`,
+      badge: stats.mean == null ? '—' : String(stats.mean),
+      open: true,
+      good: stats.mean != null && stats.mean >= OPEN_PASS,
+    };
+  }
   const correct = attempts.filter((attempt) => attemptWasCorrect(attempt)).length;
   const reviews = session.reviews ?? [];
   if (reviews.length === 0) return { correct, total: attempts.length, gemini: null };
+  const story = reviews.filter((review) => !review.unavailable && (review.storyPoints?.length ?? 0) > 0);
+  if (story.length > 0) {
+    let covered = 0;
+    let partial = 0;
+    let totalPoints = 0;
+    for (const review of story) {
+      for (const point of review.storyPoints ?? []) {
+        totalPoints += 1;
+        if (point.status === 'covered') covered += 1;
+        else if (point.status === 'partial') partial += 1;
+      }
+    }
+    return {
+      correct,
+      total: attempts.length,
+      gemini: `要点 ${covered}/${totalPoints}${partial > 0 ? ` · 一部 ${partial}` : ''}`,
+    };
+  }
   const detailed = reviews.filter((review) => !review.unavailable && review.words.length > 0);
   if (detailed.length === 0) return { correct, total: attempts.length, gemini: '以前の結果あり' };
   const risks = detailed.filter((review) => !review.correct).length;
@@ -82,5 +115,9 @@ function summarize(session: SavedSession): { correct: number; total: number; gem
 function partLabel(part: SavedSession['part']): string {
   if (part === 'A') return '音読';
   if (part === 'B-read') return '見て読む';
+  if (part === 'C') return '質問';
+  if (part === 'D') return '並べ替え';
+  if (part === 'E') return '再話';
+  if (part === 'F') return '自由回答';
   return 'リピート';
 }

@@ -141,6 +141,22 @@ export function speakOnce(text: string, rate = 1): Promise<'spoken' | 'failed'> 
   return speakTracked(text, rate, 'default');
 }
 
+/** Read phrase groups once, with a short silence between them and no labels. */
+export async function speakChunks(
+  chunks: readonly string[],
+  gapMs = 400,
+  isCancelled?: () => boolean,
+): Promise<'spoken' | 'failed'> {
+  for (let index = 0; index < chunks.length; index += 1) {
+    if (isCancelled?.()) return 'failed';
+    if (index > 0) await wait(gapMs);
+    if (isCancelled?.()) return 'failed';
+    const result = await speakOnce(chunks[index] ?? '', 1);
+    if (result !== 'spoken') return 'failed';
+  }
+  return chunks.length > 0 ? 'spoken' : 'failed';
+}
+
 function speakTracked(text: string, rate = 1, style: VoiceStyle = 'default'): Promise<'spoken' | 'failed'> {
   return (async () => {
     const gap = 80 - (Date.now() - lastCancelAt);

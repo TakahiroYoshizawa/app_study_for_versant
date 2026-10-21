@@ -7,15 +7,7 @@ import { isRepeatCorrect } from '../lib/progress';
 import { scoreRepeat } from '../lib/score';
 import { appendPracticeAttempt, openPracticeRun } from '../lib/practice-run';
 import { beginItem, cancelActive, INSTRUCTION, peekActive, type LiveSession } from '../lib/session';
-import {
-  ensureMic,
-  getAudioContext,
-  listenFor,
-  playBeep,
-  recognitionSupported,
-  releaseMic,
-  wait,
-} from '../lib/speech';
+import { ensureMic, getAudioContext, playBeep, releaseMic, wait } from '../lib/speech';
 import { saveAttempt } from '../lib/storage';
 import type { Attempt, Sentence } from '../types';
 
@@ -33,70 +25,33 @@ export function Practice({ visible = false }: { visible?: boolean }) {
   const location = useLocation();
   const autostart = Boolean((location.state as { autostart?: boolean } | null)?.autostart);
   const { setExam } = useContext(ExamModeContext);
-  const supported = recognitionSupported();
-  const [step, setStep] = useState<'mic' | 'run'>(autostart && peekActive() ? 'run' : 'mic');
   const [prompt, setPrompt] = useState<Sentence | null>(() => (autostart ? (peekActive()?.sentence ?? null) : null));
-  const [showText, setShowText] = useState(() => Boolean(autostart && peekActive()?.visible));
+  const [showText, setShowText] = useState(visible);
   const [phase, setPhase] = useState<Phase>('instruction');
-  const [stream, setStream] = useState<MediaStream | null>(null);
-  const [level, setLevel] = useState(0);
-  const [micFailed, setMicFailed] = useState(false);
-  const [micError, setMicError] = useState('');
-  const [testing, setTesting] = useState(false);
-  const [testText, setTestText] = useState('');
   const [tick, setTick] = useState<CaptureTick>(INITIAL_TICK);
   const [aborting, setAborting] = useState(false);
   const mounted = useRef(true);
   const runId = useRef(0);
   const manualStop = useRef<(() => void) | null>(null);
-  const stopTest = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    setExam(step === 'run');
+    setExam(true);
     return () => setExam(false);
-  }, [setExam, step]);
+  }, [setExam]);
 
   useEffect(() => {
     return () => {
       mounted.current = false;
-      stopTest.current?.();
       cancelActive();
       releaseMic();
     };
   }, []);
-
-  useEffect(() => {
-    if (step !== 'mic' || !stream) return;
-    const ctx = getAudioContext();
-    const source = ctx.createMediaStreamSource(stream);
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 512;
-    source.connect(analyser);
-    const samples = new Uint8Array(analyser.fftSize);
-    let frame = 0;
-    const draw = () => {
-      analyser.getByteTimeDomainData(samples);
-      let sum = 0;
-      for (const value of samples) {
-        const centered = (value - 128) / 128;
-        sum += centered * centered;
-      }
-      setLevel(Math.min(1, Math.sqrt(sum / samples.length) * 5));
-      frame = window.requestAnimationFrame(draw);
-    };
-    frame = window.requestAnimationFrame(draw);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      source.disconnect();
-    };
-  }, [step, stream]);
 
   async function continueSession(session: LiveSession, allowMic: boolean) {
     const id = ++runId.current;
     const alive = () => mounted.current && !session.cancelled && runId.current === id;
     setPrompt(session.sentence);
     setShowText(session.visible);
-    setStep('run');
     setPhase(session.visible ? 'listen' : 'instruction');
     setTick(INITIAL_TICK);
     setAborting(false);
@@ -173,62 +128,30 @@ export function Practice({ visible = false }: { visible?: boolean }) {
     const saved = saveAttempt(attempt);
     if (!alive()) return;
     const run = appendPracticeAttempt(session.visible ? 'B-read' : 'B', saved.id);
-    navigate(run.closed ? '/session' : `/history/${saved.id}`, { replace: true });
+    if (run.closed) {
+      navigate('/session', { replace: true });
+      return;
+    }
+    const next = beginItem(undefined, session.visible);
+    void continueSession(next, allowMic && Boolean(mic));
   }
 
   useEffect(() => {
-    if (!autostart) return;
-    const session = peekActive();
-    if (!session) return;
-    void continueSession(session, true);
-    // The launch click already started this session. Run it once.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autostart]);
-
-  function onEnableMic() {
-    setMicError('');
-    void ensureMic().then((next) => {
-      if (!mounted.current) return;
-      if (!next) {
-        setMicFailed(true);
-        setMicError('マイクを使えません。ブラウザのサイト設定でマイクを許可してください。');
-        return;
-      }
-      getAudioContext();
-      setStream(next);
-      setMicFailed(false);
-    });
-  }
-
-  function onTestMic() {
-    if (testing) {
-      stopTest.current?.();
-      stopTest.current = null;
-      setTesting(false);
+    const existing = autostart ? peekActive() : null;
+    if (existing) {
+      void continueSession(existing, true);
       return;
     }
-    setTestText('');
-    setTesting(true);
-    stopTest.current = listenFor(4000, setTestText);
-    window.setTimeout(() => {
-      if (!mounted.current) return;
-      stopTest.current?.();
-      stopTest.current = null;
-      setTesting(false);
-    }, 4000);
-  }
-
-  function onBegin(allowMic: boolean) {
     getAudioContext();
     openPracticeRun(visible ? 'B-read' : 'B');
-    const session = beginItem(undefined, visible);
-    void continueSession(session, allowMic);
-  }
+    void continueSession(beginItem(undefined, visible), true);
+    // Start once when this page opens. The click that landed here already unlocked audio.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  if (step === 'run') {
-    const seconds = Math.ceil(tick.remainingMs / 1000);
-    const startSeconds = Math.ceil(tick.startRemainingMs / 1000);
-    return (
+  const seconds = Math.ceil(tick.remainingMs / 1000);
+  const startSeconds = Math.ceil(tick.startRemainingMs / 1000);
+  return (
       <div className="exam-shell">
         <div className="exam-bar">
           <span>{showText ? 'Part B · Read along' : 'Part B · Repeat'}</span>
@@ -316,63 +239,6 @@ export function Practice({ visible = false }: { visible?: boolean }) {
         ) : null}
       </div>
     );
-  }
-
-  return (
-    <main className="page">
-      <p className="eyebrow">Setup</p>
-      <h1>Microphone</h1>
-      <p className="lede">
-        {visible
-          ? '最初に英文が読まれます。文は画面に出たままなので、そのあと見ながら読んでください。'
-          : '静かな場所で、ふだんの声ではっきり話してください。採点は Chrome の音声認識を使います。'}
-      </p>
-      {!supported ? (
-        <p className="note">このブラウザでは音声認識が使えません。Chrome で開くと、繰り返した文を採点できます。</p>
-      ) : null}
-      {micError ? <p className="note">{micError}</p> : null}
-      {stream ? (
-        <section className="card">
-          <h2>Level</h2>
-          <div className="meter" aria-hidden="true">
-            <span style={{ width: `${Math.round(level * 100)}%` }} />
-          </div>
-          <p className="muted">バーが動けば、マイクは入っています。</p>
-          <div className="actions">
-            <button type="button" className="btn secondary" onClick={onTestMic}>
-              {testing ? 'Stop' : 'Try speaking'}
-            </button>
-          </div>
-          <p className="caption" lang="en">
-            {testing && !testText ? 'I like tea. と言ってみてください。' : testText || 'まだ認識していません。'}
-          </p>
-        </section>
-      ) : (
-        <div className="actions">
-          <button type="button" className="btn" data-testid="enable-mic" onClick={onEnableMic}>
-            Turn mic on
-          </button>
-        </div>
-      )}
-      {stream && supported ? (
-        <div className="actions">
-          <button type="button" className="btn" data-testid="begin" onClick={() => onBegin(true)}>
-            Start
-          </button>
-        </div>
-      ) : null}
-      {micFailed || !supported ? (
-        <div className="actions">
-          <button type="button" className="btn secondary" data-testid="begin-without-mic" onClick={() => onBegin(false)}>
-            Listen only
-          </button>
-        </div>
-      ) : null}
-      {micFailed || !supported ? (
-        <p className="muted">マイクなしで始めると、6秒後に無回答として記録されます。</p>
-      ) : null}
-    </main>
-  );
 }
 
 function SoundBars() {

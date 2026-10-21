@@ -1,8 +1,10 @@
+import { StoryPoints } from './StoryPoints';
 import type { LiteralReview } from '../lib/practice-run';
 import type { Attempt } from '../types';
 
 export function GeminiReviews({ attempts, reviews }: { attempts: Attempt[]; reviews: LiteralReview[] }) {
   const byId = new Map(reviews.map((review) => [review.attemptId, review]));
+  const storyMode = reviews.some((review) => (review.storyPoints?.length ?? 0) > 0);
   const sentenceRisks = attempts.filter((attempt) => {
     const review = byId.get(attempt.id);
     return review && !review.unavailable && (review.words?.length ?? 0) > 0 && !review.correct;
@@ -12,14 +14,44 @@ export function GeminiReviews({ attempts, reviews }: { attempts: Attempt[]; revi
     return review && !review.unavailable && (review.pronunciation?.length ?? 0) > 0;
   }).length;
 
+  const storyCovered = reviews.reduce(
+    (sum, review) => sum + (review.storyPoints?.filter((point) => point.status === 'covered').length ?? 0),
+    0,
+  );
+  const storyPartial = reviews.reduce(
+    (sum, review) => sum + (review.storyPoints?.filter((point) => point.status === 'partial').length ?? 0),
+    0,
+  );
+  const storyTotal = reviews.reduce((sum, review) => sum + (review.storyPoints?.length ?? 0), 0);
   return (
     <div data-testid="gemini-result">
-      <p>
-        文として減点されうる問は {sentenceRisks} 問です。発音の指摘がある問は {pronunciationNotes} 問です。本番の点数ではなく、合格とチェックも変えていません。
-      </p>
+      {storyMode ? (
+        <p>
+          言い換えていても、要点が入っていれば入ったものとします。入った要点は {storyCovered}/{storyTotal}
+          {storyPartial > 0 ? `、一部だけの要点は ${storyPartial}` : ''} です。ブラウザの合否は変えていません。
+        </p>
+      ) : (
+        <p>
+          文として減点されうる問は {sentenceRisks} 問です。発音の指摘がある問は {pronunciationNotes} 問です。本番の点数ではなく、合格とチェックも変えていません。
+        </p>
+      )}
       {attempts.map((attempt, index) => {
         const review = byId.get(attempt.id);
         if (!review || review.unavailable) return null;
+        if (review.storyPoints && review.storyPoints.length > 0) {
+          return (
+            <article key={attempt.id} className="review-block">
+              <p className={review.correct ? 'review-head good' : 'review-head bad'}>
+                {index + 1}. {review.correct ? '正解' : '不正解'}
+              </p>
+              <StoryPoints points={review.storyPoints} />
+              {review.storyNote ? <p className="muted">{review.storyNote}</p> : null}
+              <p className="review-said" lang="en">
+                {review.transcript || '（聞こえた単語はありません）'}
+              </p>
+            </article>
+          );
+        }
         const words = review.words ?? [];
         const pronunciation = review.pronunciation ?? [];
         if (words.length === 0) {

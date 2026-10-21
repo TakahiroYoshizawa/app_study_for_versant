@@ -1,8 +1,13 @@
-import type { Attempt } from '../types';
+import type { Attempt, GeminiStatus, OpenPromptType } from '../types';
+import { sanitizeOpenFeedback } from './open-score';
 
 const ATTEMPTS_KEY = 'versant.partb.attempts';
 const LAST_SENTENCE_KEY = 'versant.partb.lastSentence';
 const LAST_READ_KEY = 'versant.partb.lastReadSentence';
+const LAST_QUESTION_KEY = 'versant.partc.lastQuestion';
+const LAST_OPEN_KEY = 'versant.partf.lastQuestion';
+const LAST_STORY_KEY = 'versant.parte.lastStory';
+const LAST_BUILD_KEY = 'versant.partd.lastBuild';
 const MAX_ATTEMPTS = 2000;
 const AUDIO_KEEP = 30;
 const MAX_AUDIO_CHARS = 280_000;
@@ -13,6 +18,14 @@ function isDifficulty(value: unknown): value is Attempt['difficulty'] {
 
 function isEnd(value: unknown): value is Attempt['end'] {
   return value === 'silence' || value === 'timeout' || value === 'no-response' || value === 'manual';
+}
+
+function isGeminiStatus(value: unknown): value is GeminiStatus {
+  return value === 'not_used' || value === 'ok' || value === 'no_key' || value === 'error' || value === 'invalid_json';
+}
+
+function isPromptType(value: unknown): value is OpenPromptType {
+  return value === 'description' || value === 'opinion';
 }
 
 function isAttempt(value: unknown): value is Attempt {
@@ -47,6 +60,11 @@ function hydrate(attempt: Attempt): Attempt {
     elapsedMs: attempt.elapsedMs ?? 0,
     wpm: attempt.wpm ?? null,
     latencyFactor: attempt.latencyFactor ?? (attempt.noResponse ? 0 : 1),
+    geminiStatus: isGeminiStatus(attempt.geminiStatus) ? attempt.geminiStatus : undefined,
+    countsForProgress: typeof attempt.countsForProgress === 'boolean' ? attempt.countsForProgress : undefined,
+    promptType: isPromptType(attempt.promptType) ? attempt.promptType : undefined,
+    requiresReason: typeof attempt.requiresReason === 'boolean' ? attempt.requiresReason : undefined,
+    openFeedback: sanitizeOpenFeedback(attempt.openFeedback),
   };
 }
 
@@ -119,4 +137,36 @@ export function loadLastReadSentenceId(): string | null {
 
 export function saveLastReadSentenceId(id: string): void {
   localStorage.setItem(LAST_READ_KEY, id);
+}
+
+export function loadLastQuestionId(): string | null {
+  return localStorage.getItem(LAST_QUESTION_KEY);
+}
+
+export function saveLastQuestionId(id: string): void {
+  localStorage.setItem(LAST_QUESTION_KEY, id);
+}
+
+export function loadLastStoryId(): string | null {
+  return localStorage.getItem(LAST_STORY_KEY);
+}
+
+export function saveLastStoryId(id: string): void {
+  localStorage.setItem(LAST_STORY_KEY, id);
+}
+
+export function loadLastBuildId(): string | null {
+  return localStorage.getItem(LAST_BUILD_KEY);
+}
+
+export function saveLastBuildId(id: string): void {
+  localStorage.setItem(LAST_BUILD_KEY, id);
+}
+
+export function loadLastOpenId(): string | null {
+  return localStorage.getItem(LAST_OPEN_KEY);
+}
+
+export function saveLastOpenId(id: string): void {
+  localStorage.setItem(LAST_OPEN_KEY, id);
 }

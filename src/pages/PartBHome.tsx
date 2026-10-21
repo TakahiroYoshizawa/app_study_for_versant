@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { LevelPicker } from '../components/LevelPicker';
 import { SENTENCES } from '../data/sentences';
-import { canSpeak, cancelSpeech, englishVoiceLabel, recognitionSupported, speak } from '../lib/speech';
+import { forLevel, usePracticeLevel } from '../lib/level';
+import { canSpeak, cancelSpeech, englishVoiceLabel, getAudioContext, recognitionSupported, speak } from '../lib/speech';
 
 const SAMPLE = 'This is a sound check for the speakers.';
 
 export function PartBHome() {
+  const { level } = usePracticeLevel();
   const supported = recognitionSupported();
   const [audioState, setAudioState] = useState<'idle' | 'playing' | 'done'>('idle');
   const [voiceLabel, setVoiceLabel] = useState<string | null>(null);
@@ -29,11 +32,12 @@ export function PartBHome() {
       <p className="lede">
         短い英文が一度だけ読まれます。聞こえたとおりに、すぐに繰り返してください。画面には、答えるまで文を出しません。
       </p>
+      <LevelPicker />
       <div className="actions">
-        <Link to="/practice" className="btn" data-testid="start-practice">
+        <Link to="/practice" className="btn" data-testid="start-practice" onClick={() => getAudioContext()}>
           Start
         </Link>
-        <Link to="/read" className="btn secondary" data-testid="start-read">
+        <Link to="/read" className="btn secondary" data-testid="start-read" onClick={() => getAudioContext()}>
           Read along
         </Link>
         <Link to="/questions" className="btn secondary" data-testid="questions-link">
@@ -79,10 +83,10 @@ export function PartBHome() {
           <li>6秒以内に話し始めないと、無回答になります。</li>
         </ol>
         <p className="muted">
-          全{SENTENCES.length}文から1文ずつ出します。間違えた文にはチェックが付き、次はチェック付きを優先します。3回連続で正解した文は、理解できたものとします。
+          この難易度は{forLevel(SENTENCES, level).length}文です。1セッションでは10文出します。間違えた文にはチェックが付き、次はチェック付きを優先します。まだ済んでいない他の文も続けて出します。3回連続で正解した文は、理解できたものとします。
         </p>
         <p className="muted">
-          見て読むは、同じ文を最初に聞いてから、画面に出たまま読む練習です。正否はリピートとは別に数えます。{' '}
+          見て読むは、同じ文を最初に聞いてから、画面に出たまま読む練習です。1セッションの中では、同じ文は1回だけ出します。正否はリピートとは別に数えます。{' '}
           <Link to="/read/questions">Read along progress</Link>
         </p>
       </section>

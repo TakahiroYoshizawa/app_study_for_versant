@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { LevelPicker } from '../components/LevelPicker';
 import { SENTENCES, difficultyLabel } from '../data/sentences';
+import { forLevel, usePracticeLevel } from '../lib/level';
 import { getAudioContext } from '../lib/speech';
 import { MASTER_STREAK, progressByItem, statusLabel } from '../lib/progress';
 import { openPracticeRun } from '../lib/practice-run';
@@ -9,11 +11,13 @@ import { loadAttempts } from '../lib/storage';
 
 export function Questions({ visible = false }: { visible?: boolean }) {
   const navigate = useNavigate();
+  const { level } = usePracticeLevel();
+  const sentences = forLevel(SENTENCES, level);
   const [attempts] = useState(() => loadAttempts());
   const progress = progressByItem(attempts);
   const statusId = (id: string) => (visible ? `read:${id}` : id);
-  const checkedCount = SENTENCES.filter((sentence) => progress.get(statusId(sentence.id))?.checked).length;
-  const masteredCount = SENTENCES.filter((sentence) => progress.get(statusId(sentence.id))?.mastered).length;
+  const checkedCount = sentences.filter((sentence) => progress.get(statusId(sentence.id))?.checked).length;
+  const masteredCount = sentences.filter((sentence) => progress.get(statusId(sentence.id))?.mastered).length;
 
   function start(sentenceId: string) {
     getAudioContext();
@@ -30,13 +34,14 @@ export function Questions({ visible = false }: { visible?: boolean }) {
         {visible
           ? '英文を見ながら読む練習です。聞こえて繰り返す練習とは、正否を別に数えます。'
           : '間違えた問題にはチェックが付きます。'}
-        {MASTER_STREAK}回連続で正解すると、その問題は理解できたものとします。チェックが付いている問題を優先して出します。
+        {MASTER_STREAK}回連続で正解すると、その問題は理解できたものとします。チェックが付いている問題を優先しますが、まだ済んでいない他の文も出します。
       </p>
+      <LevelPicker />
       <p className="muted">
-        Check {checkedCount} · Done {masteredCount} · {SENTENCES.length}
+        Check {checkedCount} · Done {masteredCount} · {sentences.length}
       </p>
       <ul className="question-list">
-        {SENTENCES.map((sentence, index) => {
+        {sentences.map((sentence, index) => {
           const status = progress.get(statusId(sentence.id));
           const showText = visible || Boolean(status && status.attempts > 0);
           return (

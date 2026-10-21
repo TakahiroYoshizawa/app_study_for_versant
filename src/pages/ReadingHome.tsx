@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { LevelPicker } from '../components/LevelPicker';
 import { READING_SETS } from '../data/readings';
-import { canSpeak, cancelSpeech, englishVoiceLabel, speakOnce } from '../lib/speech';
+import { forLevel, usePracticeLevel } from '../lib/level';
+import { canSpeak, cancelSpeech, englishVoiceLabel, getAudioContext, speakOnce } from '../lib/speech';
 
 export function ReadingHome() {
+  const { level } = usePracticeLevel();
   const [audioState, setAudioState] = useState<'idle' | 'playing' | 'done' | 'failed'>('idle');
   const [voiceLabel, setVoiceLabel] = useState<string | null>(null);
 
@@ -26,8 +29,9 @@ export function ReadingHome() {
       <p className="lede">
         画面に英文が8文出ています。音声は番号だけを読みます。その番号の文を、書いてあるとおりに読んでください。
       </p>
+      <LevelPicker />
       <div className="actions">
-        <Link to="/a/practice" className="btn" data-testid="start-reading">
+        <Link to="/a/practice" className="btn" data-testid="start-reading" onClick={() => getAudioContext()}>
           Start
         </Link>
         <Link to="/a/questions" className="btn secondary">
@@ -40,10 +44,10 @@ export function ReadingHome() {
           <li>4文ずつ、内容がつながった組が2つ、最初から見えています。</li>
           <li>「Number four.」のように、読む番号だけが一度読まれます。文そのものは読まれません。</li>
           <li>合図のあと15秒以内に、その番号の文を読みます。6秒以内に読み始めないと無回答です。</li>
-          <li>8文を1回ずつ出します。順番は毎回入れ替わり、番号順には進みません。</li>
+          <li>8文を1回ずつ出します。順番は毎回入れ替わり、番号順には進みません。1セットが終わると、採点のまとめに進みます。</li>
         </ol>
         <p className="muted">
-          セットは{READING_SETS.length}つです。間違えた文にはチェックが付き、次のセットはチェックが多いものを優先します。3回連続で正解した文は、理解できたものとします。
+          この難易度のセットは{forLevel(READING_SETS, level).length}つです。間違えた文にはチェックが付き、3回連続で正解した文は理解できたものとします。採点のあと次へ進むときは、いまのセット以外で、まだ取り組んでいないセットを優先してランダムに出します。
         </p>
       </section>
       <section className="card">
