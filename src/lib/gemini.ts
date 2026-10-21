@@ -4,7 +4,8 @@ import type { Attempt } from '../types';
 
 const KEY = 'versant.gemini.apiKey';
 const MODEL = 'gemini-3.8-flash';
-const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+const INTERACTIONS = 'https://generativelanguage.googleapis.com/v1beta/interactions';
+const API_REVISION = '2026-05-20';
 
 const TRANSCRIBE_PROMPT = `You review short English practice recordings. The exam lowers the sentence score when a word is missing, substituted, added, or when the speaker starts over. It comments on pronunciation when a sound is unclear, even if the word is still recognizable. You are not the official scorer. Do not give a number, a grade, or praise.
 
@@ -78,9 +79,81 @@ export function saveGeminiKey(key: string): void {
   else localStorage.setItem(KEY, trimmed);
 }
 
-export async function transcribeAttempts(attempts: Attempt[], apiKey: string): Promise<LiteralReview[]> {
+export type GeminiPoll =
+  | { status: 'pending' }
+  | { status: 'done'; reviews: LiteralReview[] }
+  | { status: 'failed'; message: string };
+
+export async function startBackgroundReview(attempts: Attempt[], apiKey: string): Promise<{ id: string; poll: GeminiPoll }> {
   const ready = attempts.filter((attempt) => attempt.audioDataUrl);
-  const heard = ready.length > 0 ? await requestReviews(ready, apiKey) : new Map<string, ModelReview>();
+  const input: Array<Record<string, unknown>> = [{ type: 'text', text: TRANSCRIBE_PROMPT }];
+  for (const attempt of ready) {
+    const audio = audioPart(attempt.audioDataUrl ?? '');
+    if (!audio) continue;
+    input.push({ type: 'text', text: `ID: ${attempt.id}\nTarget: ${attempt.sentenceText}` });
+    input.push({ type: 'audio', mime_type: audio.mimeType, data: audio.data });
+  }
+  if (input.length < 3) throw new Error('送れる録音がありません。');
+
+  const payload = await geminiFetch(INTERACTIONS, apiKey, {
+    method: 'POST',
+    body: JSON.stringify({
+      model: MODEL,
+      background: true,
+      store: true,
+      input,
+      response_format: [
+        {
+          type: 'text',
+          mime_type: 'application/json',
+          schema: RESPONSE_SCHEMA,
+        },
+      ],
+    }),
+  });
+  const id = payload && typeof payload === 'object' ? (payload as { id?: unknown }).id : undefined;
+  if (typeof id !== 'string' || !id.trim()) throw new Error('Gemini から受付番号が返りませんでした。');
+  return { id, poll: interpretInteraction(payload, attempts) };
+}
+
+export async function pollBackgroundReview(id: string, attempts: Attempt[], apiKey: string): Promise<GeminiPoll> {
+  let response: Response;
+  try {
+    response = await fetch(`${INTERACTIONS}/${encodeURIComponent(id)}`, {
+      headers: geminiHeaders(apiKey),
+    });
+  } catch {
+    throw new Error('Gemini に接続できませんでした。通信を確認してもう一度確認してください。');
+  }
+  const payload: unknown = await response.json().catch(() => null);
+  if (response.status === 404) {
+    return { status: 'failed', message: 'この採点はもう見つかりません。セッションのまとめからもう一度依頼してください。' };
+  }
+  if (!response.ok) throw new Error(errorMessage(response.status, payload));
+  return interpretInteraction(payload, attempts);
+}
+
+export function interpretInteraction(payload: unknown, attempts: Attempt[]): GeminiPoll {
+  const status = payload && typeof payload === 'object' ? (payload as { status?: unknown }).status : undefined;
+  if (status === 'failed' || status === 'cancelled') {
+    return { status: 'failed', message: failureMessage(payload, status) };
+  }
+  if (status !== 'completed' && status !== 'incomplete') return { status: 'pending' };
+  const text = outputText(payload);
+  if (!text) {
+    return {
+      status: 'failed',
+      message: status === 'incomplete' ? '結果が途中で切れていました。もう一度依頼してください。' : 'Gemini から結果が返りませんでした。',
+    };
+  }
+  try {
+    return { status: 'done', reviews: literalReviews(attempts, reviewsFromText(text)) };
+  } catch (caught) {
+    return { status: 'failed', message: caught instanceof Error ? caught.message : 'Gemini の応答を読み取れませんでした。' };
+  }
+}
+
+function literalReviews(attempts: Attempt[], heard: Map<string, ModelReview>): LiteralReview[] {
   return attempts.map((attempt) => {
     if (!attempt.audioDataUrl) {
       return emptyReview(attempt.id, attempt.audioSkippedReason ?? '録音がないため、聞き直しできません。');
@@ -89,6 +162,31 @@ export async function transcribeAttempts(attempts: Attempt[], apiKey: string): P
     if (!review) return emptyReview(attempt.id, 'この録音の結果が返りませんでした。');
     return reviewFromModel(attempt, review);
   });
+}
+
+async function geminiFetch(url: string, apiKey: string, init: { method: string; body: string }): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: init.method,
+      headers: geminiHeaders(apiKey, true),
+      body: init.body,
+    });
+  } catch {
+    throw new Error('Gemini に接続できませんでした。通信を確認してもう一度依頼してください。');
+  }
+  const payload: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(errorMessage(response.status, payload));
+  return payload;
+}
+
+function geminiHeaders(apiKey: string, json = false): HeadersInit {
+  const headers: Record<string, string> = {
+    'x-goog-api-key': apiKey,
+    'Api-Revision': API_REVISION,
+  };
+  if (json) headers['Content-Type'] = 'application/json';
+  return headers;
 }
 
 export function reviewFromModel(attempt: Attempt, review: ModelReview): LiteralReview {
@@ -137,46 +235,6 @@ type ModelReview = {
   pronunciation: PronunciationNote[];
 };
 
-async function requestReviews(attempts: Attempt[], apiKey: string): Promise<Map<string, ModelReview>> {
-  const parts: Array<Record<string, unknown>> = [{ text: TRANSCRIBE_PROMPT }];
-  for (const attempt of attempts) {
-    const audio = audioPart(attempt.audioDataUrl ?? '');
-    if (!audio) continue;
-    parts.push({ text: `ID: ${attempt.id}\nTarget: ${attempt.sentenceText}` });
-    parts.push({ inlineData: audio });
-  }
-  if (parts.length < 3) throw new Error('送れる録音がありません。');
-
-  let response: Response;
-  try {
-    response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
-          temperature: 0,
-          responseFormat: {
-            text: {
-              mimeType: 'APPLICATION_JSON',
-              schema: RESPONSE_SCHEMA,
-            },
-          },
-        },
-      }),
-    });
-  } catch {
-    throw new Error('Gemini に接続できませんでした。通信を確認してもう一度依頼してください。');
-  }
-
-  const payload: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(errorMessage(response.status, payload));
-  return reviewsFrom(payload);
-}
-
 function audioPart(dataUrl: string): { mimeType: string; data: string } | null {
   const matched = dataUrl.match(/^data:([^;,]+)(?:;[^,]*)?;base64,([a-z0-9+/=\s]+)$/i);
   if (!matched) return null;
@@ -186,12 +244,11 @@ function audioPart(dataUrl: string): { mimeType: string; data: string } | null {
   return { mimeType, data };
 }
 
-function reviewsFrom(payload: unknown): Map<string, ModelReview> {
-  const text = responseText(payload);
-  if (!text) throw new Error('Gemini から結果が返りませんでした。');
+function reviewsFromText(text: string): Map<string, ModelReview> {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(text);
+    parsed = JSON.parse(trimmed);
   } catch {
     throw new Error('Gemini の応答を読み取れませんでした。');
   }
@@ -252,21 +309,44 @@ function isHearing(value: unknown): value is WordHearing {
   return value === 'clear' || value === 'uncertain' || value === 'missing';
 }
 
-function responseText(payload: unknown): string {
+function outputText(payload: unknown): string {
   if (!payload || typeof payload !== 'object') return '';
-  const candidates = (payload as { candidates?: unknown }).candidates;
-  if (!Array.isArray(candidates) || !candidates[0] || typeof candidates[0] !== 'object') return '';
-  const content = (candidates[0] as { content?: { parts?: unknown } }).content;
-  if (!content || !Array.isArray(content.parts)) return '';
-  return content.parts
-    .map((part) => {
-      if (!part || typeof part !== 'object') return '';
-      const row = part as { text?: unknown; thought?: unknown };
-      if (row.thought || typeof row.text !== 'string') return '';
-      return row.text;
-    })
-    .join('')
-    .trim();
+  const direct = (payload as { output_text?: unknown }).output_text;
+  if (typeof direct === 'string' && direct.trim()) return direct.trim();
+  const steps = (payload as { steps?: unknown }).steps;
+  if (!Array.isArray(steps)) return '';
+  const chunks: string[] = [];
+  for (const step of steps) {
+    if (!step || typeof step !== 'object') continue;
+    if ((step as { type?: unknown }).type !== 'model_output') continue;
+    const content = (step as { content?: unknown }).content;
+    if (typeof content === 'string') {
+      chunks.push(content);
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      if (!part || typeof part !== 'object') continue;
+      const row = part as { type?: unknown; text?: unknown; thought?: unknown };
+      if (row.thought || row.type === 'thought') continue;
+      if (row.type != null && row.type !== 'text') continue;
+      if (typeof row.text === 'string') chunks.push(row.text);
+    }
+  }
+  return chunks.join('').trim();
+}
+
+function failureMessage(payload: unknown, status: 'failed' | 'cancelled'): string {
+  if (status === 'cancelled') return 'この採点は取り消されていました。もう一度依頼してください。';
+  const errors = payload && typeof payload === 'object' ? (payload as { errors?: unknown }).errors : undefined;
+  if (Array.isArray(errors)) {
+    for (const item of errors) {
+      if (!item || typeof item !== 'object') continue;
+      const message = (item as { message?: unknown }).message;
+      if (typeof message === 'string' && message.trim() && message.trim().length <= 180) return message.trim();
+    }
+  }
+  return apiDetail(payload) || 'Gemini 側で失敗しました。しばらくしてからもう一度依頼してください。';
 }
 
 function errorMessage(status: number, payload: unknown): string {

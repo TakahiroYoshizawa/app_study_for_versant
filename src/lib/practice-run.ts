@@ -41,6 +41,12 @@ export function practiceRunSize(part: PracticePart): number {
   return part === 'A' ? 8 : 10;
 }
 
+export function practicePartLabel(part: PracticePart): string {
+  if (part === 'A') return 'Part A';
+  if (part === 'B-read') return 'Read along';
+  return 'Part B';
+}
+
 export function loadPracticeRun(): PracticeRun | null {
   try {
     const raw = sessionStorage.getItem(RUN_KEY);
@@ -55,7 +61,7 @@ export function loadPracticeRun(): PracticeRun | null {
       part: run.part,
       attemptIds: run.attemptIds.filter((id): id is string => typeof id === 'string'),
       closed: Boolean(run.closed),
-      reviews: Array.isArray(run.reviews) ? run.reviews.filter(isReview) : undefined,
+      reviews: Array.isArray(run.reviews) ? run.reviews.filter(isLiteralReview) : undefined,
     };
   } catch {
     return null;
@@ -106,7 +112,7 @@ function writeRun(run: PracticeRun): void {
   sessionStorage.setItem(RUN_KEY, JSON.stringify(run));
 }
 
-function isReview(value: unknown): value is LiteralReview {
+export function isLiteralReview(value: unknown): value is LiteralReview {
   if (!value || typeof value !== 'object') return false;
   const review = value as Partial<LiteralReview>;
   return (

@@ -1,18 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { loadGeminiKey, saveGeminiKey, transcribeAttempts } from '../lib/gemini';
-import { loadPracticeRun, practiceRunSize, savePracticeReviews, type PracticePart } from '../lib/practice-run';
+import { GeminiReviews } from '../components/GeminiReviews';
+import { loadGeminiKey, saveGeminiKey } from '../lib/gemini';
+import { markGeminiJobsSeen, requestGeminiReview, refreshGeminiJob } from '../lib/gemini-job';
+import { loadPracticeRun, practicePartLabel, practiceRunSize, type LiteralReview } from '../lib/practice-run';
 import { attemptWasCorrect } from '../lib/progress';
 import { loadAttempt } from '../lib/storage';
+import { useGeminiJobs, usePollPendingJobs } from '../lib/use-gemini-jobs';
 import type { Attempt } from '../types';
 
 export function SessionReview() {
-  const [run, setRun] = useState(() => loadPracticeRun());
+  const [run] = useState(() => loadPracticeRun());
+  const { jobs, uploadingRunIds } = useGeminiJobs();
   const [apiKey, setApiKey] = useState(() => loadGeminiKey());
-  const [phase, setPhase] = useState<'ask' | 'sending' | 'done' | 'declined'>(() =>
-    loadPracticeRun()?.reviews?.length ? 'done' : 'ask',
-  );
+  const [declined, setDeclined] = useState(false);
   const [error, setError] = useState('');
+  const [checking, setChecking] = useState(false);
+  const [pendingNote, setPendingNote] = useState('');
+
+  const job = run ? jobs.find((item) => item.runId === run.id) : undefined;
+  const uploading = run ? uploadingRunIds.includes(run.id) : false;
+  usePollPendingJobs(job?.status === 'pending' ? [job] : []);
+
+  useEffect(() => {
+    if (job?.status === 'done' && !job.seen) markGeminiJobsSeen([job.interactionId]);
+  }, [job?.interactionId, job?.status, job?.seen]);
 
   if (!run || run.attemptIds.length === 0) {
     return (
@@ -34,39 +46,53 @@ export function SessionReview() {
     attempts.length === 0
       ? 0
       : Math.round(attempts.reduce((sum, attempt) => sum + attempt.overallScore, 0) / attempts.length);
-  const reviews = new Map((run.reviews ?? []).map((review) => [review.attemptId, review]));
-  const sentenceRisks = attempts.filter((attempt) => {
-    const review = reviews.get(attempt.id);
-    return review && !review.unavailable && !review.correct;
-  }).length;
-  const pronunciationNotes = attempts.filter((attempt) => {
-    const review = reviews.get(attempt.id);
-    return review && !review.unavailable && review.pronunciation.length > 0;
-  }).length;
+  const reviewList: LiteralReview[] | undefined =
+    job?.status === 'done' && job.reviews ? job.reviews : job ? undefined : run.reviews;
+  const reviews = new Map((reviewList ?? []).map((review) => [review.attemptId, review]));
+  const showResults = !uploading && Boolean(reviewList && reviewList.length > 0);
+  const showPending = uploading || job?.status === 'pending';
+  const showAsk = !showPending && !showResults;
 
-  async function onRequest() {
+  const onRequest = async () => {
     const key = apiKey.trim();
     if (!key) {
       setError('Gemini の APIキーを入れてください。');
       return;
     }
     setError('');
+    setPendingNote('');
     saveGeminiKey(key);
-    setPhase('sending');
     try {
-      const next = await transcribeAttempts(attempts, key);
-      savePracticeReviews(next);
-      setRun(loadPracticeRun());
-      setPhase('done');
+      await requestGeminiReview({ runId: run.id, part: run.part, attempts, apiKey: key });
     } catch (caught) {
-      setPhase('ask');
       setError(caught instanceof Error ? caught.message : 'Gemini への依頼に失敗しました。');
     }
-  }
+  };
+
+  const onCheck = async () => {
+    if (!job) return;
+    const key = apiKey.trim() || loadGeminiKey();
+    if (!key) {
+      setError('Gemini の APIキーを入れてください。');
+      return;
+    }
+    saveGeminiKey(key);
+    setChecking(true);
+    setError('');
+    setPendingNote('');
+    try {
+      const next = await refreshGeminiJob(job, key);
+      if (next.status === 'pending') setPendingNote('まだ終わっていません。時間をおいて、もう一度確認できます。');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '結果を確認できませんでした。');
+    } finally {
+      setChecking(false);
+    }
+  };
 
   return (
     <main className="page">
-      <p className="eyebrow">{partLabel(run.part)}</p>
+      <p className="eyebrow">{practicePartLabel(run.part)}</p>
       <h1>Session</h1>
       <p className="lede">
         {run.part === 'A' ? '1セットが終わったので、ここまでの結果をまとめています。' : `${practiceRunSize(run.part)}問が終わったので、ここまでの結果をまとめています。`}
@@ -104,12 +130,44 @@ export function SessionReview() {
           録音と正解文をまとめて送ります。単語が確かに聞こえるか、余分な語や言い直しがあるか、気になる発音はどこかを答えさせます。正答を増やす採点ではありません。
         </p>
         <p className="muted">発音の点数は出しません。各問の合格とチェックも書き換えません。アプリに共通のキーはありません。使う人が自分の Gemini APIキーを貼ります。利用料はそのキーのアカウントにかかり、キーはこの端末にだけ残します。</p>
-        {phase === 'declined' ? (
-          <p className="note">依頼しませんでした。端末の判定のままです。</p>
+        {declined && showAsk ? <p className="note">依頼しませんでした。端末の判定のままです。</p> : null}
+        {showAsk && (error || job?.status === 'error') ? (
+          <p className="note">{error || job?.error || '採点に失敗しました。もう一度依頼できます。'}</p>
         ) : null}
-        {phase === 'sending' ? <p className="note">録音を送っています。10問分なので、少し待ちます。</p> : null}
-        {error ? <p className="note">{error}</p> : null}
-        {phase !== 'sending' ? (
+        {showPending ? (
+          <div data-testid="gemini-pending">
+            <p className="note">
+              {uploading
+                ? '録音を送っています。送り終わるまで、このタブは開いたままにしてください。受付が終われば、離れてもあとから確認できます。'
+                : '採点を受け付けました。この画面を離れても、戻ってから結果を確認できます。上の案内からも開けます。'}
+            </p>
+            {pendingNote ? <p className="note">{pendingNote}</p> : null}
+            {error ? <p className="note">{error}</p> : null}
+            {error ? (
+              <label className="field">
+                <span>Gemini API key</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={apiKey}
+                  data-testid="gemini-key"
+                  onChange={(event) => setApiKey(event.target.value)}
+                />
+              </label>
+            ) : null}
+            {uploading ? null : (
+              <div className="actions">
+                <button type="button" className="btn" data-testid="check-gemini" disabled={checking} onClick={() => void onCheck()}>
+                  {checking ? '確認しています' : '結果を確認'}
+                </button>
+                <Link to="/gemini" className="btn secondary">
+                  確認ページ
+                </Link>
+              </div>
+            )}
+          </div>
+        ) : null}
+        {showAsk ? (
           <>
             <label className="field">
               <span>Gemini API key</span>
@@ -125,65 +183,28 @@ export function SessionReview() {
               <button type="button" className="btn" data-testid="request-gemini" onClick={() => void onRequest()}>
                 Geminiに聞く
               </button>
-              {phase === 'ask' ? (
+              {job?.status === 'error' || declined ? null : (
                 <button
                   type="button"
                   className="btn secondary"
                   data-testid="skip-gemini"
                   onClick={() => {
                     setError('');
-                    setPhase('declined');
+                    setDeclined(true);
                   }}
                 >
                   依頼しない
                 </button>
-              ) : null}
+              )}
             </div>
           </>
         ) : null}
       </section>
 
-      {phase === 'done' && run.reviews ? (
-        <section className="card" data-testid="gemini-result">
+      {showResults && reviewList ? (
+        <section className="card">
           <h2>Gemini の聞き取り</h2>
-          <p>
-            文として減点されうる問は {sentenceRisks} 問です。発音の指摘がある問は {pronunciationNotes} 問です。本番の点数ではなく、合格とチェックも変えていません。
-          </p>
-          {attempts.map((attempt, index) => {
-            const review = reviews.get(attempt.id);
-            if (!review || review.unavailable) return null;
-            const risk = !review.correct;
-            return (
-              <article key={attempt.id} className={risk || review.pronunciation.length > 0 ? 'review-block differed' : 'review-block'}>
-                <h3>
-                  {index + 1}. {risk ? '文として減点されうる' : '文の抜けは見つからなかった'}
-                </h3>
-                <p className="muted">端末の判定は {attemptWasCorrect(attempt) ? '正解' : '不正解'} のままです。</p>
-                <ul className="hearing-list">
-                  {review.words.map((word, wordIndex) => (
-                    <li key={`${word.word}-${wordIndex}`}>
-                      <span lang="en">{word.word}</span>
-                      <small className={word.status === 'clear' ? 'good' : 'bad'}>{hearingLabel(word.status)}</small>
-                    </li>
-                  ))}
-                </ul>
-                {review.extras.length > 0 ? <p>余分な語: <span lang="en">{review.extras.join(' ')}</span></p> : null}
-                {review.restart ? <p>言い直しています。</p> : null}
-                {review.pronunciation.length > 0 ? (
-                  <ul>
-                    {review.pronunciation.map((note) => (
-                      <li key={`${note.word}-${note.note}`}>{note.note}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="muted">気になる発音の指摘はありません。</p>
-                )}
-                <p className="muted" lang="en">
-                  {review.transcript || '（聞こえた単語はありません）'}
-                </p>
-              </article>
-            );
-          })}
+          <GeminiReviews attempts={attempts} reviews={reviewList} />
         </section>
       ) : null}
 
@@ -199,19 +220,7 @@ export function SessionReview() {
   );
 }
 
-function hearingLabel(status: 'clear' | 'uncertain' | 'missing'): string {
-  if (status === 'clear') return '聞こえる';
-  if (status === 'uncertain') return 'あいまい';
-  return '言っていない';
-}
-
-function partLabel(part: PracticePart): string {
-  if (part === 'A') return 'Part A';
-  if (part === 'B-read') return 'Read along';
-  return 'Part B';
-}
-
-function againPath(part: PracticePart): string {
+function againPath(part: 'A' | 'B' | 'B-read'): string {
   if (part === 'A') return '/a';
   if (part === 'B-read') return '/read';
   return '/practice';

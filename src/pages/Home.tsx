@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
+import { useGeminiJobs } from '../lib/use-gemini-jobs';
 
 export function Home() {
+  const { jobs } = useGeminiJobs();
   return (
     <main className="page">
       <p className="eyebrow">Versant</p>
@@ -38,6 +40,11 @@ export function Home() {
         <Link to="/history" className="btn secondary">
           History
         </Link>
+        {jobs.length > 0 ? (
+          <Link to="/gemini" className="btn secondary" data-testid="open-gemini">
+            Geminiの採点
+          </Link>
+        ) : null}
       </div>
     </main>
   );

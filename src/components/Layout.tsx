@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { GeminiBanner } from './GeminiBanner';
 import { ExamModeContext } from './exam-mode';
 
 export function Layout() {
@@ -24,6 +25,7 @@ export function Layout() {
               <NavLink to="/history">History</NavLink>
             </nav>
           </div>
+          <GeminiBanner />
         </header>
       )}
       <Outlet />

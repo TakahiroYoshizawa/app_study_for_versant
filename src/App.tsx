@@ -9,6 +9,7 @@ import { Questions } from './pages/Questions';
 import { ReadingHome } from './pages/ReadingHome';
 import { ReadingPractice } from './pages/ReadingPractice';
 import { ReadingQuestions } from './pages/ReadingQuestions';
+import { GeminiCheck } from './pages/GeminiCheck';
 import { SessionReview } from './pages/SessionReview';
 
 const basename = import.meta.env.BASE_URL.replace(/\/$/, '') || '/'
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/read" element={<Practice visible />} />
           <Route path="/read/questions" element={<Questions visible />} />
           <Route path="/session" element={<SessionReview />} />
+          <Route path="/gemini" element={<GeminiCheck />} />
           <Route path="/history" element={<History />} />
           <Route path="/history/:id" element={<AttemptDetail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
