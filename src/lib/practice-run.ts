@@ -48,6 +48,12 @@ export function practiceRunSize(part: PracticePart): number {
   return part === 'A' ? 8 : 10;
 }
 
+export function practicePartLabel(part: PracticePart): string {
+  if (part === 'A') return 'Part A';
+  if (part === 'B-read') return 'Read along';
+  return 'Part B';
+}
+
 export function loadPracticeRun(): PracticeRun | null {
   try {
     const raw = sessionStorage.getItem(RUN_KEY);
@@ -233,7 +239,7 @@ function isSavedSession(value: unknown): value is SavedSession {
 
 function normalizeReviews(value: unknown): LiteralReview[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const reviews = value.filter(isReview).map((review) => ({
+  const reviews = value.filter(isLiteralReview).map((review) => ({
     ...review,
     words: Array.isArray(review.words) ? review.words : [],
     extras: Array.isArray(review.extras) ? review.extras : [],
@@ -243,7 +249,7 @@ function normalizeReviews(value: unknown): LiteralReview[] | undefined {
   return reviews.length > 0 ? reviews : undefined;
 }
 
-function isReview(value: unknown): value is LiteralReview {
+export function isLiteralReview(value: unknown): value is LiteralReview {
   if (!value || typeof value !== 'object') return false;
   const review = value as Partial<LiteralReview>;
   return (

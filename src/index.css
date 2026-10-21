@@ -84,6 +84,25 @@ button, a { font: inherit; }
 .nav a:hover { background: rgba(255, 255, 255, 0.14); color: #fff8ee; }
 .nav a.active { color: var(--ink); background: var(--accent); }
 
+.gemini-banner {
+  background: #fff1c9;
+  color: var(--ink);
+  border-top: 1px solid var(--accent);
+}
+.gemini-banner p {
+  width: min(740px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 8px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+}
+.gemini-banner a {
+  color: var(--teal-deep);
+  font-weight: 700;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: var(--teal);
