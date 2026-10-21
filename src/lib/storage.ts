@@ -3,7 +3,8 @@ import type { Attempt } from '../types';
 const ATTEMPTS_KEY = 'versant.partb.attempts';
 const LAST_SENTENCE_KEY = 'versant.partb.lastSentence';
 const LAST_READ_KEY = 'versant.partb.lastReadSentence';
-const MAX_ATTEMPTS = 80;
+const MAX_ATTEMPTS = 2000;
+const AUDIO_KEEP = 30;
 const MAX_AUDIO_CHARS = 280_000;
 
 function isDifficulty(value: unknown): value is Attempt['difficulty'] {
@@ -65,23 +66,24 @@ export function loadAttempt(id: string): Attempt | null {
   return loadAttempts().find((attempt) => attempt.id === id) ?? null;
 }
 
+function withoutAudio(attempt: Attempt, reason: string): Attempt {
+  if (!attempt.audioDataUrl) return attempt;
+  const rest = { ...attempt };
+  delete rest.audioDataUrl;
+  return { ...rest, audioSkippedReason: reason };
+}
+
 function writeAttempts(attempts: Attempt[]): Attempt[] {
-  const trimmed = attempts.slice(0, MAX_ATTEMPTS);
+  const trimmed = attempts.slice(0, MAX_ATTEMPTS).map((attempt, index) =>
+    index < AUDIO_KEEP ? attempt : withoutAudio(attempt, '古い録音は残していません。正否は残しています。'),
+  );
   try {
     localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(trimmed));
     return trimmed;
   } catch {
-    const withoutAudio = trimmed.map((attempt) => {
-      if (!attempt.audioDataUrl) return attempt;
-      const rest = { ...attempt };
-      delete rest.audioDataUrl;
-      return {
-        ...rest,
-        audioSkippedReason: '容量の都合で音声は保存していません。',
-      };
-    });
-    localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(withoutAudio));
-    return withoutAudio;
+    const compact = trimmed.map((attempt) => withoutAudio(attempt, '容量の都合で音声は保存していません。正否は残しています。'));
+    localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(compact));
+    return compact;
   }
 }
 

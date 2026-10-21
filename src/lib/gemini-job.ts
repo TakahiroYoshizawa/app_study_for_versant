@@ -1,5 +1,12 @@
 import { pollBackgroundReview, startBackgroundReview, type GeminiPoll } from './gemini';
-import { isLiteralReview, loadPracticeRun, savePracticeReviews, type LiteralReview, type PracticePart } from './practice-run';
+import {
+  isLiteralReview,
+  loadPracticeRun,
+  loadSavedSession,
+  savePracticeReviews,
+  type LiteralReview,
+  type PracticePart,
+} from './practice-run';
 import { loadAttempt } from './storage';
 import type { Attempt } from '../types';
 
@@ -108,7 +115,8 @@ function applyPoll(job: GeminiJob, poll: GeminiPoll): GeminiJob {
   if (poll.status === 'pending') return { ...job, status: 'pending', error: undefined };
   if (poll.status === 'failed') return { ...job, status: 'error', error: poll.message, reviews: undefined };
   const current = loadPracticeRun();
-  if (current?.id === job.runId) savePracticeReviews(poll.reviews);
+  const saved = loadSavedSession(job.runId) ?? (current?.id === job.runId ? current : null);
+  if (saved) savePracticeReviews(poll.reviews, saved);
   return { ...job, status: 'done', reviews: poll.reviews, error: undefined, seen: false };
 }
 

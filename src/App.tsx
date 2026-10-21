@@ -29,6 +29,7 @@ export default function App() {
           <Route path="/read" element={<Practice visible />} />
           <Route path="/read/questions" element={<Questions visible />} />
           <Route path="/session" element={<SessionReview />} />
+          <Route path="/session/:id" element={<SessionReview />} />
           <Route path="/gemini" element={<GeminiCheck />} />
           <Route path="/history" element={<History />} />
           <Route path="/history/:id" element={<AttemptDetail />} />
